@@ -24,6 +24,7 @@ from ballast.fixed_income.sensitivity import empirical_duration
 from ballast.fixed_income.store import build_curves, etf_rate_sensitivity_data, price_bonds
 from ballast.fixed_income.store import par_curve_on
 from ballast.risk.commands import cmd_backtest, cmd_stress, cmd_var
+from ballast.construction.commands import cmd_attribution, cmd_optimize
 from ballast.portfolio.seed import (
     seed_bond_terms,
     seed_instruments,
@@ -470,6 +471,20 @@ def build_parser() -> argparse.ArgumentParser:
     add_risk_args(add("backtest", cmd_backtest, "daily VaR backtest with Kupiec, Christoffersen and Basel tests"), sims=False)
     p = add("stress", cmd_stress, "replay historical market episodes on today's portfolio")
     p.add_argument("--portfolio", default="Ballast Core")
+
+    p = add("optimize", cmd_optimize, "min-variance, max-Sharpe, risk parity and Black-Litterman portfolios")
+    p.add_argument("--portfolio", default="Ballast Core")
+    p.add_argument("--lookback", type=int, default=756, help="trading days of returns (default 756, about 3 years)")
+    p.add_argument("--max-weight", type=float, default=0.35, help="cap per asset (default 0.35)")
+    p.add_argument("--view", action="append", metavar="VIEW",
+                   help="Black-Litterman view: SYMBOL:0.10 (10%%/yr) or LONG-SHORT:0.05; repeatable")
+    p.add_argument("--delta", type=float, default=2.5, help="risk aversion (default 2.5)")
+    p.add_argument("--tau", type=float, default=0.05, help="prior uncertainty scale (default 0.05)")
+
+    p = add("attribution", cmd_attribution, "Brinson-Fachler attribution against a benchmark")
+    p.add_argument("--portfolio", default="Ballast Core")
+    p.add_argument("--benchmark", default="SPY:0.6,TLT:0.4", help="constituents and weights (default SPY:0.6,TLT:0.4)")
+    p.add_argument("--since", type=date.fromisoformat, default=None)
 
     p = add("rate-sensitivity", cmd_rate_sensitivity, "empirical duration of an ETF against a Treasury yield")
     p.add_argument("--symbol", default="TLT")

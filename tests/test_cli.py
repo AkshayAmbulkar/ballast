@@ -259,3 +259,26 @@ def test_risk_commands_run_and_store_results(cli_db, capsys):
         years = conn.execute(text("SELECT COUNT(*) FROM var_backtest_by_year")).scalar_one()
     assert methods == ["historical", "monte_carlo", "parametric"]
     assert n_bt > 1000 and years > 0
+
+
+def test_optimize_and_attribution(cli_db, capsys):
+    assert cli.main(["bootstrap", "--start", "2023-06-01"]) == 0
+    capsys.readouterr()
+    assert cli.main(["optimize", "--view", "NVDA-SPY:0.05", "--view", "GLD:0.06"]) == 0
+    out = capsys.readouterr().out
+    assert "max_sharpe" in out and "Efficient frontier" in out
+    assert cli.main(["attribution"]) == 0
+    out = capsys.readouterr().out
+    assert "Brinson-Fachler" in out
+    with cli_db.connect() as conn:
+        runs = conn.execute(text("SELECT method, views FROM optimization_runs ORDER BY run_id")).all()
+        sums = conn.execute(text("SELECT run_id, SUM(weight) FROM optimization_weights GROUP BY run_id")).all()
+        eq = conn.execute(text(
+            "SELECT AVG(port_weight) FROM attribution_daily WHERE segment = 'equity'")).scalar_one()
+        segs = conn.execute(text("SELECT DISTINCT segment FROM attribution_daily ORDER BY 1")).scalars().all()
+    assert [m for m, _ in runs] == ["current", "min_variance", "max_sharpe", "risk_parity", "max_sharpe_hist"]
+    assert runs[0][1] == "NVDA-SPY:0.05; GLD:0.06"
+    assert all(abs(s - 1) < 1e-6 for _, s in sums)
+    # Regression: stocks with no explicit segment were once dropped (NULL read as NaN, and NaN is truthy).
+    assert eq > 0.3
+    assert segs == ["equity", "gold", "rates"]

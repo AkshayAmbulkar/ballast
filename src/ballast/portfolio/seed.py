@@ -27,17 +27,18 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 def seed_instruments(engine: Engine, path: Path = SEED_DIR / "instruments.csv") -> int:
     rows = [
-        {"symbol": r["symbol"].upper(), "name": r["name"], "asset_class": r["asset_class"]}
+        {"symbol": r["symbol"].upper(), "name": r["name"], "asset_class": r["asset_class"],
+         "segment": (r.get("segment") or "").lower() or None}
         for r in _read_csv(path)
     ]
     with engine.begin() as conn:
         conn.execute(
             text(
                 """
-                INSERT INTO instruments (symbol, name, asset_class)
-                VALUES (:symbol, :name, :asset_class)
+                INSERT INTO instruments (symbol, name, asset_class, segment)
+                VALUES (:symbol, :name, :asset_class, :segment)
                 ON CONFLICT (symbol) DO UPDATE
-                SET name = EXCLUDED.name, asset_class = EXCLUDED.asset_class
+                SET name = EXCLUDED.name, asset_class = EXCLUDED.asset_class, segment = EXCLUDED.segment
                 """
             ),
             rows,

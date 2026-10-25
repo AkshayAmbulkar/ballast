@@ -19,7 +19,7 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 | 2 | **Fixed income:** bootstrapped Treasury zero curve, bond pricing, duration, convexity, DV01, key-rate DV01, curve scenarios, empirical ETF duration | ✅ Done |
 | 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility smile, SOFR compounding, SOFR swap valuation and hedging | ✅ Done |
 | 4 | **Risk:** historical, parametric and Monte Carlo VaR and Expected Shortfall, Kupiec and Christoffersen backtests, Basel traffic light, historical stress tests | ✅ Done |
-| 5 | **Portfolio construction:** mean-variance, Black-Litterman, risk parity, Brinson attribution | Planned |
+| 5 | **Portfolio construction:** mean-variance and efficient frontier, Black-Litterman with views, risk parity, Brinson-Fachler attribution with Carino linking | ✅ Done |
 | 6 | **Product:** dashboard, API, PRD and deployment | Planned |
 
 ## What Phase 1 does
@@ -72,6 +72,14 @@ Conventions, formulas and limitations: [docs/methodology/03-derivatives.md](docs
 - **Historical stress tests.** The 2022 rate shock, the SVB failure, the August 2024 yen carry unwind, the DeepSeek day and the April 2025 tariff selloff, replayed on today's portfolio.
 
 Definitions, tests and limitations: [docs/methodology/04-risk.md](docs/methodology/04-risk.md).
+
+## What Phase 5 does
+
+- **Optimizers.** Minimum variance, maximum Sharpe, the efficient frontier and risk parity (equal risk contribution), long-only with position caps, each checked against its closed-form solution.
+- **Black-Litterman.** Implied returns from today's allocation, blended with views such as `--view NVDA-SPY:0.05`. Reproduces He and Litterman's (1999) published equilibrium returns, posterior returns and optimal weights.
+- **Performance attribution.** Daily Brinson-Fachler allocation, selection and interaction effects against a 60/40 SPY/TLT benchmark, Carino-linked so they add up exactly to the cumulative active return, with tracking error and information ratio.
+
+Definitions, tests and limitations: [docs/methodology/05-construction.md](docs/methodology/05-construction.md).
 
 ## Design decisions
 
@@ -188,6 +196,8 @@ If `~/.config` is not writable on your machine, keep `secrets.env` in any privat
 | `ballast var [--confidence 0.99 --lookback 500 --sims 10000]` | 1-day VaR and Expected Shortfall by three methods, plus VaR by asset class |
 | `ballast backtest [--confidence 0.99]` | Daily VaR backtest with Kupiec, Christoffersen and Basel traffic-light results |
 | `ballast stress` | Replay historical market episodes on today's portfolio |
+| `ballast optimize [--view NVDA-SPY:0.05 --max-weight 0.35]` | Min-variance, max-Sharpe, risk-parity and Black-Litterman portfolios, plus the efficient frontier |
+| `ballast attribution [--benchmark SPY:0.6,TLT:0.4]` | Brinson-Fachler attribution, tracking error and information ratio |
 | `ballast rate-sensitivity [--symbol TLT --series DGS20 --since DATE]` | Empirical duration of an ETF against a Treasury yield |
 | `ballast bootstrap` | Run all of the above in order |
 
@@ -208,6 +218,7 @@ The suite runs against a real PostgreSQL database (`ballast_test`, created autom
 - Hull's bootstrap and duration examples, par bonds repricing to 100, key-rate DV01s summing to parallel DV01, and coupons flowing through P&L without artificial jumps
 - Hull's Black-Scholes, Greeks and binomial-tree examples, the NY Fed's SOFR Index worked example, swap valuation identities, a negative swap payment flowing through P&L, and recovery of a known volatility skew from a synthetic option chain
 - VaR and ES definitions, normal constants (2.326σ, 2.665σ), Monte Carlo against the closed form, the RiskMetrics EWMA recursion, Kupiec against an independent binomial likelihood ratio, clustered exceptions caught by Christoffersen, and historical VaR from the database equal to a hand calculation
+- optimizers against closed forms, risk parity equalising risk contributions, He and Litterman's published Black-Litterman example, Brinson-Fachler effects summing to the active return, and Carino linking over 500 days
 - the security guarantees below: no key in error messages, secrets outside the repository, localhost-only database, a test suite that refuses to touch any database not named `*_test`
 
 CI runs the suite on Python 3.10 and 3.12 against PostgreSQL 16 on every push.
@@ -234,6 +245,7 @@ ballast/
 ├── src/ballast/
 │   ├── cli.py              `ballast` command-line interface
 │   ├── db.py               engine and migration runner
+│   ├── construction/       optimizers, Black-Litterman, performance attribution
 │   ├── derivatives/        options, Greeks, implied volatility, SOFR compounding, swaps
 │   ├── fixed_income/       curve bootstrap, bond pricing, rate risk, scenarios
 │   ├── market_data/        FRED and Yahoo clients, upsert loaders

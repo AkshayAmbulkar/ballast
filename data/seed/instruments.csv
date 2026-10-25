@@ -1,15 +1,15 @@
-symbol,name,asset_class
-AAPL,Apple Inc.,equity
-GLD,SPDR Gold Shares,etf
-JPM,JPMorgan Chase & Co.,equity
-MSFT,Microsoft Corporation,equity
-NVDA,NVIDIA Corporation,equity
-SPY,SPDR S&P 500 ETF Trust,etf
-TLT,iShares 20+ Year Treasury Bond ETF,etf
-XOM,Exxon Mobil Corporation,equity
-UST-4.125-2028,Illustrative 4.125% U.S. Treasury note due 2028-02-15 (priced off the CMT curve),treasury
-UST-4.25-2034,Illustrative 4.25% U.S. Treasury note due 2034-11-15 (priced off the CMT curve),treasury
-UST-4.75-2054,Illustrative 4.75% U.S. Treasury bond due 2054-11-15 (priced off the CMT curve),treasury
-SPY-20261218-P700,Illustrative SPY 700 put expiring 2026-12-18 (American; model-marked),option
-NVDA-20270115-C250,Illustrative NVDA 250 call expiring 2027-01-15 (American; model-marked),option
-SOFR-OIS-10Y-20260901,Illustrative 10-year SOFR OIS from 2026-09-01 (receive-fixed instrument; model-marked),swap
+symbol,name,asset_class,segment
+AAPL,Apple Inc.,equity,
+GLD,SPDR Gold Shares,etf,gold
+JPM,JPMorgan Chase & Co.,equity,
+MSFT,Microsoft Corporation,equity,
+NVDA,NVIDIA Corporation,equity,
+SPY,SPDR S&P 500 ETF Trust,etf,
+TLT,iShares 20+ Year Treasury Bond ETF,etf,rates
+XOM,Exxon Mobil Corporation,equity,
+UST-4.125-2028,Illustrative 4.125% U.S. Treasury note due 2028-02-15 (priced off the CMT curve),treasury,
+UST-4.25-2034,Illustrative 4.25% U.S. Treasury note due 2034-11-15 (priced off the CMT curve),treasury,
+UST-4.75-2054,Illustrative 4.75% U.S. Treasury bond due 2054-11-15 (priced off the CMT curve),treasury,
+SPY-20261218-P700,Illustrative SPY 700 put expiring 2026-12-18 (American; model-marked),option,
+NVDA-20270115-C250,Illustrative NVDA 250 call expiring 2027-01-15 (American; model-marked),option,
+SOFR-OIS-10Y-20260901,Illustrative 10-year SOFR OIS from 2026-09-01 (receive-fixed instrument; model-marked),swap,
