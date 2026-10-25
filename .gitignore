@@ -1,0 +1,32 @@
+# ---- Secrets: never commit ----
+# Ballast reads secrets from ~/.config/ballast/secrets.env, outside this folder.
+# These patterns are a second line of defence if a secrets file lands here by mistake.
+.env
+.env.*
+secrets.env
+*.pem
+*.key
+
+# ---- Private portfolio data ----
+# Put your own real trades and account exports here; they stay on your computer.
+data/private/
+
+# ---- Database dumps ----
+*.dump
+*.backup
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
