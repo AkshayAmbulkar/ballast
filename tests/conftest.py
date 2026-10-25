@@ -24,7 +24,7 @@ from ballast.db import migrate
 
 TABLES = (
     "trades, portfolios, corporate_actions, prices, rate_observations, zero_curves, bond_terms, "
-    "option_terms, swap_terms, option_quotes, instruments"
+    "option_terms, swap_terms, option_quotes, var_results, var_backtest, instruments"
 )
 
 

@@ -185,14 +185,15 @@ def years_to_expiry(day: date, expiry: date) -> float:
     return (expiry - day).days / 365.0
 
 
-def option_value(c: OptionContract, S: float, T: float, r: float, q: float, sigma: float) -> float:
+def option_value(c: OptionContract, S: float, T: float, r: float, q: float, sigma: float,
+                 steps: int = TREE_STEPS) -> float:
     if T <= 0:
         return max(S - c.strike, 0.0) if c.option_type == "call" else max(c.strike - S, 0.0)
     european = bs_price(c.option_type, S, c.strike, T, r, sigma, q)
     if not c.american:
         return european
-    american_tree = crr_price(c.option_type, S, c.strike, T, r, sigma, steps=TREE_STEPS, q=q, american=True)
-    european_tree = crr_price(c.option_type, S, c.strike, T, r, sigma, steps=TREE_STEPS, q=q, american=False)
+    american_tree = crr_price(c.option_type, S, c.strike, T, r, sigma, steps=steps, q=q, american=True)
+    european_tree = crr_price(c.option_type, S, c.strike, T, r, sigma, steps=steps, q=q, american=False)
     return american_tree - european_tree + european
 
 

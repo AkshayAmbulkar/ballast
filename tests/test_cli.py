@@ -243,3 +243,19 @@ def test_vol_smile_recovers_known_volatilities(cli_db, monkeypatch, capsys):
         got = conn.execute(text("SELECT strike, model_iv FROM option_quotes ORDER BY strike")).all()
     assert len(got) == 41
     assert max(abs(iv - vol(float(k))) for k, iv in got) < 1e-6
+
+
+def test_risk_commands_run_and_store_results(cli_db, capsys):
+    assert cli.main(["bootstrap", "--start", "2022-01-03"]) == 0
+    out = capsys.readouterr().out
+    assert "Value-at-Risk" in out and "diversification benefit" in out
+    assert "Stress tests" in out and "rates_2022" in out
+    assert cli.main(["backtest"]) == 0
+    bt = capsys.readouterr().out
+    assert "kupiec_p" in bt and "Largest losses in the backtest" in bt
+    with cli_db.connect() as conn:
+        methods = conn.execute(text("SELECT method FROM var_results ORDER BY method")).scalars().all()
+        n_bt = conn.execute(text("SELECT COUNT(*) FROM var_backtest")).scalar_one()
+        years = conn.execute(text("SELECT COUNT(*) FROM var_backtest_by_year")).scalar_one()
+    assert methods == ["historical", "monte_carlo", "parametric"]
+    assert n_bt > 1000 and years > 0

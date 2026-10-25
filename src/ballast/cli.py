@@ -23,6 +23,7 @@ from ballast.fixed_income.analytics import curve_snapshot, rates_risk_report
 from ballast.fixed_income.sensitivity import empirical_duration
 from ballast.fixed_income.store import build_curves, etf_rate_sensitivity_data, price_bonds
 from ballast.fixed_income.store import par_curve_on
+from ballast.risk.commands import cmd_backtest, cmd_stress, cmd_var
 from ballast.portfolio.seed import (
     seed_bond_terms,
     seed_instruments,
@@ -395,6 +396,8 @@ def cmd_bootstrap(engine: Engine, args) -> int:
         ("Building report", cmd_report),
         ("Interest-rate risk", cmd_rates_risk),
         ("Option Greeks", cmd_greeks),
+        ("Value-at-Risk", cmd_var),
+        ("Stress tests", cmd_stress),
     ]
     for label, fn in steps:
         print(f"\n== {label}")
@@ -455,6 +458,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("sofr-check", cmd_sofr_check, "compare Ballast's SOFR compounding with the NY Fed's published 30-day averages")
 
+    def add_risk_args(p, sims=True):
+        p.add_argument("--portfolio", default="Ballast Core")
+        p.add_argument("--confidence", type=float, default=0.99)
+        p.add_argument("--lookback", type=int, default=500, help="trading days of history (default 500)")
+        if sims:
+            p.add_argument("--sims", type=int, default=10_000, help="Monte Carlo scenarios")
+            p.add_argument("--seed", type=int, default=7)
+
+    add_risk_args(add("var", cmd_var, "1-day VaR and Expected Shortfall: historical, parametric, Monte Carlo"))
+    add_risk_args(add("backtest", cmd_backtest, "daily VaR backtest with Kupiec, Christoffersen and Basel tests"), sims=False)
+    p = add("stress", cmd_stress, "replay historical market episodes on today's portfolio")
+    p.add_argument("--portfolio", default="Ballast Core")
+
     p = add("rate-sensitivity", cmd_rate_sensitivity, "empirical duration of an ETF against a Treasury yield")
     p.add_argument("--symbol", default="TLT")
     p.add_argument("--series", default="DGS20")
@@ -477,7 +493,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--option-terms-file", type=Path, default=SEED_DIR / "option_terms.csv")
     p.add_argument("--swap-terms-file", type=Path, default=SEED_DIR / "swap_terms.csv")
     p.add_argument("--trades-file", type=Path, default=SEED_DIR / "trades.csv")
-    p.set_defaults(symbols=None, series=None, rebuild=False)
+    p.set_defaults(symbols=None, series=None, rebuild=False, confidence=0.99, lookback=500, sims=10_000, seed=7)
 
     return parser
 

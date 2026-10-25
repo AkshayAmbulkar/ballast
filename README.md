@@ -18,7 +18,7 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 | 1 | **Data platform:** PostgreSQL schema, market-data pipeline, trade ledger, positions, daily P&L, data-quality checks | ✅ Done |
 | 2 | **Fixed income:** bootstrapped Treasury zero curve, bond pricing, duration, convexity, DV01, key-rate DV01, curve scenarios, empirical ETF duration | ✅ Done |
 | 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility smile, SOFR compounding, SOFR swap valuation and hedging | ✅ Done |
-| 4 | **Risk:** historical, parametric and Monte Carlo VaR/CVaR, Kupiec backtesting, historical stress scenarios | Planned |
+| 4 | **Risk:** historical, parametric and Monte Carlo VaR and Expected Shortfall, Kupiec and Christoffersen backtests, Basel traffic light, historical stress tests | ✅ Done |
 | 5 | **Portfolio construction:** mean-variance, Black-Litterman, risk parity, Brinson attribution | Planned |
 | 6 | **Product:** dashboard, API, PRD and deployment | Planned |
 
@@ -63,6 +63,15 @@ Conventions, formulas and limitations: [docs/methodology/02-fixed-income.md](doc
 - **SOFR swap as a hedge.** A pay-fixed 10-year SOFR swap, valued with realized fixings plus a projected curve, offsets most of the bonds' DV01; the combined key-rate table shows the curve risk a single swap leaves behind.
 
 Conventions, formulas and limitations: [docs/methodology/03-derivatives.md](docs/methodology/03-derivatives.md).
+
+## What Phase 4 does
+
+- **VaR three ways, with full revaluation.** Historical simulation (500 days), parametric (EWMA covariance) and Monte Carlo (10,000 scenarios), each with Expected Shortfall. Every scenario reprices stocks, bonds, the swap and the options, using a vectorized curve bootstrap and option price grids.
+- **Diversification.** Each asset class's VaR on its own, and the benefit of holding them together.
+- **Daily backtest.** VaR set at each previous close against the P&L actually booked the next day since January 2024, with the Kupiec, Christoffersen and conditional-coverage tests and the Basel traffic light.
+- **Historical stress tests.** The 2022 rate shock, the SVB failure, the August 2024 yen carry unwind, the DeepSeek day and the April 2025 tariff selloff, replayed on today's portfolio.
+
+Definitions, tests and limitations: [docs/methodology/04-risk.md](docs/methodology/04-risk.md).
 
 ## Design decisions
 
@@ -176,6 +185,9 @@ If `~/.config` is not writable on your machine, keep `secrets.env` in any privat
 | `ballast greeks` | Option Greeks and delta-adjusted equity exposure |
 | `ballast vol-smile [--symbol SPY --expiry DATE]` | Implied volatility smile from Yahoo's listed option chain (run during U.S. market hours) |
 | `ballast sofr-check` | Compare Ballast's SOFR compounding with the NY Fed's published 30-day averages |
+| `ballast var [--confidence 0.99 --lookback 500 --sims 10000]` | 1-day VaR and Expected Shortfall by three methods, plus VaR by asset class |
+| `ballast backtest [--confidence 0.99]` | Daily VaR backtest with Kupiec, Christoffersen and Basel traffic-light results |
+| `ballast stress` | Replay historical market episodes on today's portfolio |
 | `ballast rate-sensitivity [--symbol TLT --series DGS20 --since DATE]` | Empirical duration of an ETF against a Treasury yield |
 | `ballast bootstrap` | Run all of the above in order |
 
@@ -195,6 +207,7 @@ The suite runs against a real PostgreSQL database (`ballast_test`, created autom
 - an end-to-end `ballast bootstrap` on the seed portfolio
 - Hull's bootstrap and duration examples, par bonds repricing to 100, key-rate DV01s summing to parallel DV01, and coupons flowing through P&L without artificial jumps
 - Hull's Black-Scholes, Greeks and binomial-tree examples, the NY Fed's SOFR Index worked example, swap valuation identities, a negative swap payment flowing through P&L, and recovery of a known volatility skew from a synthetic option chain
+- VaR and ES definitions, normal constants (2.326σ, 2.665σ), Monte Carlo against the closed form, the RiskMetrics EWMA recursion, Kupiec against an independent binomial likelihood ratio, clustered exceptions caught by Christoffersen, and historical VaR from the database equal to a hand calculation
 - the security guarantees below: no key in error messages, secrets outside the repository, localhost-only database, a test suite that refuses to touch any database not named `*_test`
 
 CI runs the suite on Python 3.10 and 3.12 against PostgreSQL 16 on every push.
@@ -224,7 +237,8 @@ ballast/
 │   ├── derivatives/        options, Greeks, implied volatility, SOFR compounding, swaps
 │   ├── fixed_income/       curve bootstrap, bond pricing, rate risk, scenarios
 │   ├── market_data/        FRED and Yahoo clients, upsert loaders
-│   └── portfolio/          trade seeding, reference P&L simulation
+│   ├── portfolio/          trade seeding, reference P&L simulation
+│   └── risk/               VaR, Expected Shortfall, backtests, stress tests
 └── tests/
 ```
 
