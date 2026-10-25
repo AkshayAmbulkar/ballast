@@ -1,0 +1,13 @@
+trade_ref,portfolio,trade_date,symbol,quantity,price,fees,note
+BC-0001,Ballast Core,2024-01-02,SPY,100,,0,Initial allocation
+BC-0002,Ballast Core,2024-01-02,AAPL,50,,0,Initial allocation
+BC-0003,Ballast Core,2024-01-02,MSFT,30,,0,Initial allocation
+BC-0004,Ballast Core,2024-01-02,NVDA,20,,0,Initial allocation (pre 10-for-1 split of June 2024)
+BC-0005,Ballast Core,2024-01-02,JPM,60,,0,Initial allocation
+BC-0006,Ballast Core,2024-01-02,XOM,80,,0,Initial allocation
+BC-0007,Ballast Core,2024-01-02,TLT,120,,0,Initial allocation
+BC-0008,Ballast Core,2024-01-02,GLD,50,,0,Initial allocation
+BC-0009,Ballast Core,2024-07-01,NVDA,-50,,0,Trim after split (200 shares held)
+BC-0010,Ballast Core,2025-03-03,TLT,60,,0,Add duration
+BC-0011,Ballast Core,2025-03-03,XOM,-40,,0,Reduce energy
+BC-0012,Ballast Core,2025-09-02,GLD,20,,0,Add gold

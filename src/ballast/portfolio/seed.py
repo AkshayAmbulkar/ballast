@@ -1,0 +1,110 @@
+"""Load the instrument master and the trade ledger from CSV files.
+
+A blank price in trades.csv means "executed at that day's close". The close is
+looked up in the prices table, so prices must be loaded before trades.
+"""
+
+from __future__ import annotations
+
+import csv
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+from sqlalchemy import Engine, text
+
+from ballast.config import SEED_DIR
+
+
+class SeedError(RuntimeError):
+    pass
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as f:
+        return [{k: (v or "").strip() for k, v in row.items()} for row in csv.DictReader(f)]
+
+
+def seed_instruments(engine: Engine, path: Path = SEED_DIR / "instruments.csv") -> int:
+    rows = [
+        {"symbol": r["symbol"].upper(), "name": r["name"], "asset_class": r["asset_class"]}
+        for r in _read_csv(path)
+    ]
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO instruments (symbol, name, asset_class)
+                VALUES (:symbol, :name, :asset_class)
+                ON CONFLICT (symbol) DO UPDATE
+                SET name = EXCLUDED.name, asset_class = EXCLUDED.asset_class
+                """
+            ),
+            rows,
+        )
+    return len(rows)
+
+
+def seed_trades(engine: Engine, path: Path = SEED_DIR / "trades.csv") -> int:
+    rows = _read_csv(path)
+    with engine.begin() as conn:  # all-or-nothing: a bad row loads no trades
+        instrument_ids = dict(conn.execute(text("SELECT symbol, instrument_id FROM instruments")).all())
+
+        portfolio_ids: dict[str, int] = {}
+        for name in sorted({r["portfolio"] for r in rows}):
+            portfolio_ids[name] = conn.execute(
+                text(
+                    """
+                    INSERT INTO portfolios (name) VALUES (:n)
+                    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+                    RETURNING portfolio_id
+                    """
+                ),
+                {"n": name},
+            ).scalar_one()
+
+        for line_no, r in enumerate(rows, start=2):  # line 1 is the header
+            symbol = r["symbol"].upper()
+            if symbol not in instrument_ids:
+                raise SeedError(f"trades.csv line {line_no}: unknown symbol {symbol}")
+            instrument_id = instrument_ids[symbol]
+            trade_date = date.fromisoformat(r["trade_date"])
+
+            if r["price"]:
+                price = Decimal(r["price"])
+                note = r["note"] or None
+            else:
+                price = conn.execute(
+                    text("SELECT close FROM prices WHERE instrument_id = :i AND price_date = :d"),
+                    {"i": instrument_id, "d": trade_date},
+                ).scalar()
+                if price is None:
+                    raise SeedError(
+                        f"trades.csv line {line_no}: no {symbol} close on {trade_date} to price the trade. "
+                        "Load prices first, and check the date is a trading day."
+                    )
+                note = "; ".join(filter(None, [r["note"], "priced at close"]))
+
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO trades (portfolio_id, instrument_id, trade_ref, trade_date, quantity, price, fees, note)
+                    VALUES (:p, :i, :ref, :d, :q, :px, :fees, :note)
+                    ON CONFLICT (portfolio_id, trade_ref) DO UPDATE
+                    SET instrument_id = EXCLUDED.instrument_id, trade_date = EXCLUDED.trade_date,
+                        quantity = EXCLUDED.quantity, price = EXCLUDED.price,
+                        fees = EXCLUDED.fees, note = EXCLUDED.note
+                    """
+                ),
+                {
+                    "p": portfolio_ids[r["portfolio"]],
+                    "i": instrument_id,
+                    "ref": r["trade_ref"],
+                    "d": trade_date,
+                    "q": Decimal(r["quantity"]),
+                    "px": price,
+                    "fees": Decimal(r["fees"] or "0"),
+                    "note": note,
+                },
+            )
+    return len(rows)

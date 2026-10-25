@@ -1,0 +1,9 @@
+symbol,name,asset_class
+AAPL,Apple Inc.,equity
+GLD,SPDR Gold Shares,etf
+JPM,JPMorgan Chase & Co.,equity
+MSFT,Microsoft Corporation,equity
+NVDA,NVIDIA Corporation,equity
+SPY,SPDR S&P 500 ETF Trust,etf
+TLT,iShares 20+ Year Treasury Bond ETF,etf
+XOM,Exxon Mobil Corporation,equity
