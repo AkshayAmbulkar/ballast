@@ -16,7 +16,7 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 | Phase | Module | Status |
 |---|---|---|
 | 1 | **Data platform:** PostgreSQL schema, market-data pipeline, trade ledger, positions, daily P&L, data-quality checks | ✅ Done |
-| 2 | **Fixed income:** bootstrapped Treasury zero curve, bond pricing, duration, convexity, DV01, key-rate durations, curve shocks | Planned |
+| 2 | **Fixed income:** bootstrapped Treasury zero curve, bond pricing, duration, convexity, DV01, key-rate DV01, curve scenarios, empirical ETF duration | ✅ Done |
 | 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility surface, SOFR swap valuation | Planned |
 | 4 | **Risk:** historical, parametric and Monte Carlo VaR/CVaR, Kupiec backtesting, historical stress scenarios | Planned |
 | 5 | **Portfolio construction:** mean-variance, Black-Litterman, risk parity, Brinson attribution | Planned |
@@ -41,6 +41,17 @@ flowchart LR
 - **Trade ledger as the source of truth.** Positions are never stored; they are derived from trades, so any historical position can be rebuilt and audited.
 - **Daily P&L in SQL.** Window functions and lateral joins compute split-adjusted positions, market value, and daily P&L including dividends and fees.
 - **Data-quality checks.** SQL views flag trades booked on non-trading days, trade prices far from the close, and price jumps that no recorded split explains.
+
+## What Phase 2 does
+
+- **Treasury zero curve every day.** The 11 CMT par yields are bootstrapped into discount factors (bills under 6 months as simple bond-equivalent yields, then a semiannual par bootstrap to 30 years) and stored in the `zero_curves` table, about 1,200 daily curves since 2022.
+- **Bonds inside the portfolio.** Treasury notes and bonds are marked daily off the curve, with Actual/Actual accrued interest and coupons credited as income, so they flow through the same positions and P&L views as equities.
+- **Interest-rate risk.** Yield to maturity, modified and effective duration, convexity, DV01, and key-rate DV01 at all 11 tenors, which add up exactly to the parallel DV01.
+- **Scenarios with full revaluation.** Parallel ±100bp, steepeners and flatteners, and the actual 2022 curve moves applied to today's curve, each shown next to its first-order key-rate estimate.
+- **Market-implied duration.** A regression of TLT's daily returns on 20-year yield changes estimates its empirical duration and how much of its return the change in rates explains.
+- **Checked against textbook figures.** Hull's bootstrap and duration examples are reproduced to the published decimals.
+
+Conventions, formulas and limitations: [docs/methodology/02-fixed-income.md](docs/methodology/02-fixed-income.md).
 
 ## Design decisions
 
@@ -128,9 +139,11 @@ open -e ~/.config/ballast/secrets.env   # paste your key after FRED_API_KEY=, sa
 # 3. Start PostgreSQL (reachable from this computer only)
 docker compose up -d
 
-# 4. Build everything: schema, market data, trades, checks, report
+# 4. Build everything: schema, market data, curves, bonds, trades, checks, report, bond risk
 ballast bootstrap
 ```
+
+If `~/.config` is not writable on your machine, keep `secrets.env` in any private folder and point Ballast at it, for example `echo 'export BALLAST_CONFIG_DIR="$HOME/.ballast"' >> ~/.zshrc`.
 
 ### Commands
 
@@ -140,9 +153,14 @@ ballast bootstrap
 | `ballast seed-instruments` | Load `data/seed/instruments.csv` |
 | `ballast load-prices` | Load prices, dividends and splits from Yahoo Finance |
 | `ballast load-rates` | Load Treasury yields and SOFR from FRED |
+| `ballast build-curves` | Bootstrap and store the Treasury zero curve for every date |
+| `ballast price-bonds` | Mark Treasury holdings off the curve and record coupons |
 | `ballast seed-trades` | Load `data/seed/trades.csv`, or `--file` for another ledger (a blank price means "at that day's close") |
 | `ballast check` | Run data-quality checks; exit code 1 if any fail |
 | `ballast report` | Print current holdings, weights and lifetime P&L |
+| `ballast curve [--date]` | Show the Treasury curve: par, zero and forward rates, discount factors |
+| `ballast bond-risk` | Duration, DV01, key-rate DV01 and scenario P&L for bond holdings |
+| `ballast rate-sensitivity [--symbol TLT --series DGS20 --since DATE]` | Empirical duration of an ETF against a Treasury yield |
 | `ballast bootstrap` | Run all of the above in order |
 
 ## Tests
@@ -159,6 +177,7 @@ The suite runs against a real PostgreSQL database (`ballast_test`, created autom
 - conversion of Yahoo's split-adjusted history back to as-traded prices
 - schema constraints, migration checksums, idempotent loads and data-quality checks
 - an end-to-end `ballast bootstrap` on the seed portfolio
+- Hull's bootstrap and duration examples, par bonds repricing to 100, key-rate DV01s summing to parallel DV01, and coupons flowing through P&L without artificial jumps
 - the security guarantees below: no key in error messages, secrets outside the repository, localhost-only database, a test suite that refuses to touch any database not named `*_test`
 
 CI runs the suite on Python 3.10 and 3.12 against PostgreSQL 16 on every push.
@@ -185,6 +204,7 @@ ballast/
 ├── src/ballast/
 │   ├── cli.py              `ballast` command-line interface
 │   ├── db.py               engine and migration runner
+│   ├── fixed_income/       curve bootstrap, bond pricing, rate risk, scenarios
 │   ├── market_data/        FRED and Yahoo clients, upsert loaders
 │   └── portfolio/          trade seeding, reference P&L simulation
 └── tests/

@@ -11,3 +11,6 @@ BC-0009,Ballast Core,2024-07-01,NVDA,-50,,0,Trim after split (200 shares held)
 BC-0010,Ballast Core,2025-03-03,TLT,60,,0,Add duration
 BC-0011,Ballast Core,2025-03-03,XOM,-40,,0,Reduce energy
 BC-0012,Ballast Core,2025-09-02,GLD,20,,0,Add gold
+BC-0013,Ballast Core,2025-03-03,UST-4.125-2028,200,,0,Buy $20k face 3Y note (quantity = 100-face units)
+BC-0014,Ballast Core,2025-03-03,UST-4.25-2034,300,,0,Buy $30k face 10Y note
+BC-0015,Ballast Core,2025-03-03,UST-4.75-2054,150,,0,Buy $15k face 30Y bond

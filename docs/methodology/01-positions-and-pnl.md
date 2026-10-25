@@ -44,7 +44,7 @@ $$
 | $\text{TradeCash}_{(p,d]}$ | $\sum (\text{quantity} \times \text{price} + \text{fees})$ for trades dated after $p$ up to $d$. Buys are positive (cash out), sells negative (cash in). |
 | $\text{Dividends}_{(p,d]}$ | $\sum (\text{dividend per share} \times \text{quantity at } p\text{'s close})$ for ex-dates after $p$ up to $d$ |
 
-Dividends are recognised on the **ex-date** (accrual basis). That is the day the share price drops by the dividend, so recognising income the same day keeps daily P&L free of an artificial loss. A short position has negative quantity and therefore pays the dividend.
+Dividends are recognised on the **ex-date** (accrual basis). From Phase 2, bond coupons are credited the same way on their payment date, and the view's `income` column holds dividends plus coupons. That is the day the share price drops by the dividend, so recognising income the same day keeps daily P&L free of an artificial loss. A short position has negative quantity and therefore pays the dividend.
 
 Summing over a position's life gives the accounting identity that the tests check:
 

@@ -55,7 +55,7 @@ def test_worked_example_daily_pnl(worked_example):
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT as_of_date, quantity, market_value, dividend_income, daily_pnl "
+                "SELECT as_of_date, quantity, market_value, income, daily_pnl "
                 "FROM position_pnl_daily WHERE portfolio_id = :p ORDER BY as_of_date"
             ),
             {"p": pid},
@@ -64,7 +64,7 @@ def test_worked_example_daily_pnl(worked_example):
     assert [r.as_of_date for r in rows] == [D1, D2, D3, D4, D5]
     assert [r.quantity for r in rows] == [D(100), D(100), D(200), D(200), D(100)]
     assert [r.market_value for r in rows] == [D(10000), D(10200), D(10300), D(10400), D(5300)]
-    assert [r.dividend_income for r in rows] == [D(0), D(0), D(0), D(100), D(0)]
+    assert [r.income for r in rows] == [D(0), D(0), D(0), D(100), D(0)]
     assert [r.daily_pnl for r in rows] == [D(-51), D(200), D(100), D(200), D(179)]
 
 
@@ -89,7 +89,7 @@ def test_accounting_identity(worked_example):
                        (SELECT market_value FROM position_pnl_daily WHERE portfolio_id = :p
                         ORDER BY as_of_date DESC LIMIT 1),
                        SUM(trade_cash),
-                       SUM(dividend_income)
+                       SUM(income)
                 FROM position_pnl_daily WHERE portfolio_id = :p
                 """
             ),
@@ -103,7 +103,7 @@ def test_sql_matches_independent_simulation(worked_example):
     with engine.connect() as conn:
         sql_rows = conn.execute(
             text(
-                "SELECT instrument_id, as_of_date, quantity, market_value, trade_cash, dividend_income, daily_pnl "
+                "SELECT instrument_id, as_of_date, quantity, market_value, trade_cash, income, daily_pnl "
                 "FROM position_pnl_daily WHERE portfolio_id = :p ORDER BY instrument_id, as_of_date"
             ),
             {"p": pid},
@@ -115,7 +115,7 @@ def test_sql_matches_independent_simulation(worked_example):
         assert s.quantity == r.quantity
         assert s.market_value == r.market_value
         assert s.trade_cash == r.trade_cash
-        assert s.dividend_income == r.dividend_income
+        assert s.income == r.income
         assert s.daily_pnl == r.daily_pnl
 
 

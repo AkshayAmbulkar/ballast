@@ -45,6 +45,43 @@ def seed_instruments(engine: Engine, path: Path = SEED_DIR / "instruments.csv") 
     return len(rows)
 
 
+def seed_bond_terms(engine: Engine, path: Path = SEED_DIR / "bond_terms.csv") -> int:
+    """Load coupon, issue and maturity for Treasury instruments (instruments must exist first)."""
+    if not path.exists():
+        return 0
+    rows = _read_csv(path)
+    with engine.begin() as conn:
+        ids = dict(conn.execute(text("SELECT symbol, instrument_id FROM instruments")).all())
+        params = []
+        for line_no, r in enumerate(rows, start=2):
+            symbol = r["symbol"].upper()
+            if symbol not in ids:
+                raise SeedError(f"{path.name} line {line_no}: unknown symbol {symbol}")
+            params.append(
+                {
+                    "i": ids[symbol],
+                    "c": Decimal(r["coupon_rate"]),
+                    "iss": date.fromisoformat(r["issue_date"]),
+                    "mat": date.fromisoformat(r["maturity_date"]),
+                    "f": int(r.get("coupon_frequency") or 2),
+                }
+            )
+        if params:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO bond_terms (instrument_id, coupon_rate, issue_date, maturity_date, coupon_frequency)
+                    VALUES (:i, :c, :iss, :mat, :f)
+                    ON CONFLICT (instrument_id) DO UPDATE
+                    SET coupon_rate = EXCLUDED.coupon_rate, issue_date = EXCLUDED.issue_date,
+                        maturity_date = EXCLUDED.maturity_date, coupon_frequency = EXCLUDED.coupon_frequency
+                    """
+                ),
+                params,
+            )
+    return len(params)
+
+
 def seed_trades(engine: Engine, path: Path = SEED_DIR / "trades.csv") -> int:
     rows = _read_csv(path)
     with engine.begin() as conn:  # all-or-nothing: a bad row loads no trades

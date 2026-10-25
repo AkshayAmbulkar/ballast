@@ -30,7 +30,7 @@ class PnlRow:
     close: Decimal
     market_value: Decimal
     trade_cash: Decimal
-    dividend_income: Decimal
+    income: Decimal              # dividends + coupons
     daily_pnl: Decimal
 
 
@@ -39,16 +39,16 @@ def simulate_position(
     instrument_id: int,
     trades: list[tuple[date, Decimal, Decimal, Decimal]],     # (trade_date, quantity, price, fees)
     closes: list[tuple[date, Decimal]],                        # (price_date, close), any order
-    dividends: dict[date, Decimal],                            # ex_date -> as-traded cash per share
+    income: dict[date, Decimal],                               # ex/payment date -> cash per share or unit
     splits: dict[date, Decimal],                               # ex_date -> ratio
 ) -> list[PnlRow]:
     """Walk one position forward day by day.
 
     On each trading day d (previous trading day p):
-      1. credit dividends with ex-date in (p, d] on the shares held at p's close
+      1. credit income (dividends, coupons) dated in (p, d] on the quantity held at p's close
       2. apply splits with ex-date in (p, d] to the share count
       3. apply trades dated in (p, d]
-      4. mark to d's close; P&L = change in market value - trade cash + dividends
+      4. mark to d's close; P&L = change in market value - trade cash + income
     """
     if not trades:
         return []
@@ -66,9 +66,9 @@ def simulate_position(
         def in_bucket(x: date) -> bool:
             return x <= day and (prev_day is None or x > prev_day)
 
-        dividend_income = ZERO
+        day_income = ZERO
         if prev_day is not None:
-            dividend_income = sum((v * shares for d, v in dividends.items() if in_bucket(d)), ZERO)
+            day_income = sum((v * shares for d, v in income.items() if in_bucket(d)), ZERO)
             for d, ratio in sorted(splits.items()):
                 if in_bucket(d):
                     shares *= ratio
@@ -89,8 +89,8 @@ def simulate_position(
                 close=close_on[day],
                 market_value=mv,
                 trade_cash=trade_cash,
-                dividend_income=dividend_income,
-                daily_pnl=mv - prev_mv - trade_cash + dividend_income,
+                income=day_income,
+                daily_pnl=mv - prev_mv - trade_cash + day_income,
             )
         )
         prev_mv = mv
@@ -131,7 +131,10 @@ def reference_pnl(engine: Engine, portfolio_id: int) -> list[PnlRow]:
                 text("SELECT ex_date, action_type, value FROM corporate_actions WHERE instrument_id = :i"),
                 {"i": iid},
             ).all()
-            dividends = {d: v for d, t, v in actions if t == "cash_dividend"}
+            income: dict[date, Decimal] = {}
+            for d, t, v in actions:
+                if t in ("cash_dividend", "coupon"):
+                    income[d] = income.get(d, ZERO) + v
             splits = {d: v for d, t, v in actions if t == "split"}
-            rows.extend(simulate_position(portfolio_id, iid, trades, closes, dividends, splits))
+            rows.extend(simulate_position(portfolio_id, iid, trades, closes, income, splits))
     return rows
