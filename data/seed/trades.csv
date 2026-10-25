@@ -14,3 +14,6 @@ BC-0012,Ballast Core,2025-09-02,GLD,20,,0,Add gold
 BC-0013,Ballast Core,2025-03-03,UST-4.125-2028,200,,0,Buy $20k face 3Y note (quantity = 100-face units)
 BC-0014,Ballast Core,2025-03-03,UST-4.25-2034,300,,0,Buy $30k face 10Y note
 BC-0015,Ballast Core,2025-03-03,UST-4.75-2054,150,,0,Buy $15k face 30Y bond
+BC-0016,Ballast Core,2026-09-01,SPY-20261218-P700,100,,0,Buy 1 protective put contract (quantity = shares covered)
+BC-0017,Ballast Core,2026-09-01,NVDA-20270115-C250,-100,,0,Sell 1 covered call contract against NVDA shares
+BC-0018,Ballast Core,2026-09-01,SOFR-OIS-10Y-20260901,-500,,0,Pay fixed on $50k notional at market (hedges bond DV01)

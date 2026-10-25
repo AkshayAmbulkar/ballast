@@ -60,7 +60,13 @@ def migrate(engine: Engine, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]:
             continue
         # One transaction per file: a failing migration leaves no partial schema behind.
         with engine.begin() as conn:
-            conn.exec_driver_sql(sql)
+            # Run on the raw DBAPI cursor with no parameters, so SQL containing "%"
+            # (e.g. LIKE 'model:%') is sent as-is instead of parsed for placeholders.
+            cursor = conn.connection.cursor()
+            try:
+                cursor.execute(sql)
+            finally:
+                cursor.close()
             conn.execute(
                 text("INSERT INTO schema_migrations (filename, checksum) VALUES (:f, :c)"),
                 {"f": path.name, "c": checksum},

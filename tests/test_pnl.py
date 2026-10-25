@@ -169,3 +169,34 @@ def test_trade_on_non_trading_day_is_captured_and_flagged(db):
     assert [(r.as_of_date, r.quantity, r.daily_pnl) for r in rows] == [(D5, D(10), D(10))]
     # ...and the data-quality check still flags it for review.
     assert flagged == ["W1"]
+
+
+def test_negative_swap_payment_flows_through_pnl_and_matches_reference(db):
+    """A pay-fixed swap (negative quantity) receiving a net payment, and model marks that cross zero."""
+    with db.begin() as conn:
+        iid = insert_instrument(conn, "SWAP-TEST", "swap")
+        conn.execute(
+            text("INSERT INTO prices (instrument_id, price_date, close, source) VALUES "
+                 "(:i, :a, 0, 'model:SOFR_OIS'), (:i, :b, -0.40, 'model:SOFR_OIS'), (:i, :c, 0.25, 'model:SOFR_OIS')"),
+            {"i": iid, "a": D1, "b": D2, "c": D3},
+        )
+        conn.execute(
+            text("INSERT INTO corporate_actions (instrument_id, ex_date, action_type, value, source) "
+                 "VALUES (:i, :d, 'swap_payment', -0.15, 'test')"),
+            {"i": iid, "d": D3},
+        )
+        pid = insert_portfolio(conn)
+        insert_trade(conn, pid, iid, "SW1", D1, "-500", "0")
+    with db.connect() as conn:
+        rows = conn.execute(
+            text("SELECT as_of_date, market_value, income, daily_pnl FROM position_pnl_daily "
+                 "WHERE portfolio_id = :p ORDER BY as_of_date"), {"p": pid},
+        ).all()
+    # D2: value per 100 falls to -0.40 -> pay-fixed position gains 500 x 0.40 = 200.
+    # D3: value rises to +0.25 (-325) and the receive-fixed leg pays -0.15 per 100, which the
+    #     pay-fixed side receives: -500 x -0.15 = +75. Total -250.
+    assert [(r.market_value, r.income, r.daily_pnl) for r in rows] == [
+        (D(0), D(0), D(0)), (D(200), D(0), D(200)), (D("-125"), D(75), D("-250")),
+    ]
+    ref = reference_pnl(db, pid)
+    assert [r.daily_pnl for r in ref] == [r.daily_pnl for r in rows]

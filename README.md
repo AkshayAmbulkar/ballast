@@ -17,7 +17,7 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 |---|---|---|
 | 1 | **Data platform:** PostgreSQL schema, market-data pipeline, trade ledger, positions, daily P&L, data-quality checks | ✅ Done |
 | 2 | **Fixed income:** bootstrapped Treasury zero curve, bond pricing, duration, convexity, DV01, key-rate DV01, curve scenarios, empirical ETF duration | ✅ Done |
-| 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility surface, SOFR swap valuation | Planned |
+| 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility smile, SOFR compounding, SOFR swap valuation and hedging | ✅ Done |
 | 4 | **Risk:** historical, parametric and Monte Carlo VaR/CVaR, Kupiec backtesting, historical stress scenarios | Planned |
 | 5 | **Portfolio construction:** mean-variance, Black-Litterman, risk parity, Brinson attribution | Planned |
 | 6 | **Product:** dashboard, API, PRD and deployment | Planned |
@@ -52,6 +52,17 @@ flowchart LR
 - **Checked against textbook figures.** Hull's bootstrap and duration examples are reproduced to the published decimals.
 
 Conventions, formulas and limitations: [docs/methodology/02-fixed-income.md](docs/methodology/02-fixed-income.md).
+
+## What Phase 3 does
+
+- **Option pricing.** Black-Scholes-Merton with dividends, and binomial trees for American options, with Hull's control variate so tree noise does not distort the Greeks. Hull's Black-Scholes, Greeks and American-put examples are reproduced to the published decimals, including the tree's convergence path (4.263, 4.272, 4.278, 4.283).
+- **Options inside the portfolio.** A protective SPY put and a covered NVDA call are marked daily (realized volatility, Treasury zero rate, trailing dividend yield) and flow through the same P&L views as stocks and bonds.
+- **Greeks and delta-adjusted exposure.** Position delta, gamma, vega, theta and rho, with option deltas netted against stock holdings per underlying.
+- **Implied volatility smile from live option chains.** The forward is implied from put-call parity and each out-of-the-money option is inverted with Black-76; results are compared with Yahoo's own implied volatilities and saved for SQL analysis.
+- **SOFR compounding checked against the New York Fed.** Reproduces the Fed's published SOFR Index worked example to 8 decimals, and matches all 1,178 of the Fed's published 30-day SOFR averages from February 2022 to October 2026 exactly at 5 decimals (`ballast sofr-check`).
+- **SOFR swap as a hedge.** A pay-fixed 10-year SOFR swap, valued with realized fixings plus a projected curve, offsets most of the bonds' DV01; the combined key-rate table shows the curve risk a single swap leaves behind.
+
+Conventions, formulas and limitations: [docs/methodology/03-derivatives.md](docs/methodology/03-derivatives.md).
 
 ## Design decisions
 
@@ -139,7 +150,7 @@ open -e ~/.config/ballast/secrets.env   # paste your key after FRED_API_KEY=, sa
 # 3. Start PostgreSQL (reachable from this computer only)
 docker compose up -d
 
-# 4. Build everything: schema, market data, curves, bonds, trades, checks, report, bond risk
+# 4. Build everything: schema, market data, curves, model marks, trades, checks, report, risk
 ballast bootstrap
 ```
 
@@ -155,11 +166,16 @@ If `~/.config` is not writable on your machine, keep `secrets.env` in any privat
 | `ballast load-rates` | Load Treasury yields and SOFR from FRED |
 | `ballast build-curves` | Bootstrap and store the Treasury zero curve for every date |
 | `ballast price-bonds` | Mark Treasury holdings off the curve and record coupons |
+| `ballast price-options` | Mark option positions (Black-Scholes, or a binomial tree for American options) |
+| `ballast price-swaps` | Set at-market swap rates, mark swaps, record swap payments |
 | `ballast seed-trades` | Load `data/seed/trades.csv`, or `--file` for another ledger (a blank price means "at that day's close") |
 | `ballast check` | Run data-quality checks; exit code 1 if any fail |
 | `ballast report` | Print current holdings, weights and lifetime P&L |
 | `ballast curve [--date]` | Show the Treasury curve: par, zero and forward rates, discount factors |
-| `ballast bond-risk` | Duration, DV01, key-rate DV01 and scenario P&L for bond holdings |
+| `ballast rates-risk` | Duration, DV01, key-rate DV01 and scenario P&L for bonds and swaps together |
+| `ballast greeks` | Option Greeks and delta-adjusted equity exposure |
+| `ballast vol-smile [--symbol SPY --expiry DATE]` | Implied volatility smile from Yahoo's listed option chain (run during U.S. market hours) |
+| `ballast sofr-check` | Compare Ballast's SOFR compounding with the NY Fed's published 30-day averages |
 | `ballast rate-sensitivity [--symbol TLT --series DGS20 --since DATE]` | Empirical duration of an ETF against a Treasury yield |
 | `ballast bootstrap` | Run all of the above in order |
 
@@ -178,6 +194,7 @@ The suite runs against a real PostgreSQL database (`ballast_test`, created autom
 - schema constraints, migration checksums, idempotent loads and data-quality checks
 - an end-to-end `ballast bootstrap` on the seed portfolio
 - Hull's bootstrap and duration examples, par bonds repricing to 100, key-rate DV01s summing to parallel DV01, and coupons flowing through P&L without artificial jumps
+- Hull's Black-Scholes, Greeks and binomial-tree examples, the NY Fed's SOFR Index worked example, swap valuation identities, a negative swap payment flowing through P&L, and recovery of a known volatility skew from a synthetic option chain
 - the security guarantees below: no key in error messages, secrets outside the repository, localhost-only database, a test suite that refuses to touch any database not named `*_test`
 
 CI runs the suite on Python 3.10 and 3.12 against PostgreSQL 16 on every push.
@@ -204,6 +221,7 @@ ballast/
 ├── src/ballast/
 │   ├── cli.py              `ballast` command-line interface
 │   ├── db.py               engine and migration runner
+│   ├── derivatives/        options, Greeks, implied volatility, SOFR compounding, swaps
 │   ├── fixed_income/       curve bootstrap, bond pricing, rate risk, scenarios
 │   ├── market_data/        FRED and Yahoo clients, upsert loaders
 │   └── portfolio/          trade seeding, reference P&L simulation

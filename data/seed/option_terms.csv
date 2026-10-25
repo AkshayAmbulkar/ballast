@@ -1,0 +1,3 @@
+symbol,underlying,option_type,strike,expiry_date,exercise_style,multiplier
+SPY-20261218-P700,SPY,put,700,2026-12-18,american,100
+NVDA-20270115-C250,NVDA,call,250,2027-01-15,american,100

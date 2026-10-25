@@ -22,7 +22,10 @@ from sqlalchemy.exc import OperationalError
 from ballast.config import get_settings
 from ballast.db import migrate
 
-TABLES = "trades, portfolios, corporate_actions, prices, rate_observations, zero_curves, bond_terms, instruments"
+TABLES = (
+    "trades, portfolios, corporate_actions, prices, rate_observations, zero_curves, bond_terms, "
+    "option_terms, swap_terms, option_quotes, instruments"
+)
 
 
 def is_safe_test_database(url: str) -> bool:

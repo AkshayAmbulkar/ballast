@@ -82,6 +82,78 @@ def seed_bond_terms(engine: Engine, path: Path = SEED_DIR / "bond_terms.csv") ->
     return len(params)
 
 
+def seed_option_terms(engine: Engine, path: Path = SEED_DIR / "option_terms.csv") -> int:
+    if not path.exists():
+        return 0
+    rows = _read_csv(path)
+    with engine.begin() as conn:
+        ids = dict(conn.execute(text("SELECT symbol, instrument_id FROM instruments")).all())
+        params = []
+        for line_no, r in enumerate(rows, start=2):
+            sym, und = r["symbol"].upper(), r["underlying"].upper()
+            for s in (sym, und):
+                if s not in ids:
+                    raise SeedError(f"{path.name} line {line_no}: unknown symbol {s}")
+            params.append(
+                {
+                    "i": ids[sym], "u": ids[und], "t": r["option_type"].lower(), "k": Decimal(r["strike"]),
+                    "e": date.fromisoformat(r["expiry_date"]), "x": r["exercise_style"].lower(),
+                    "m": int(r.get("multiplier") or 100),
+                }
+            )
+        if params:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO option_terms (instrument_id, underlying_id, option_type, strike, expiry_date,
+                                              exercise_style, multiplier)
+                    VALUES (:i, :u, :t, :k, :e, :x, :m)
+                    ON CONFLICT (instrument_id) DO UPDATE
+                    SET underlying_id = EXCLUDED.underlying_id, option_type = EXCLUDED.option_type,
+                        strike = EXCLUDED.strike, expiry_date = EXCLUDED.expiry_date,
+                        exercise_style = EXCLUDED.exercise_style, multiplier = EXCLUDED.multiplier
+                    """
+                ),
+                params,
+            )
+    return len(params)
+
+
+def seed_swap_terms(engine: Engine, path: Path = SEED_DIR / "swap_terms.csv") -> int:
+    """A blank fixed_rate means 'traded at market': `ballast price-swaps` sets it to the par rate."""
+    if not path.exists():
+        return 0
+    rows = _read_csv(path)
+    with engine.begin() as conn:
+        ids = dict(conn.execute(text("SELECT symbol, instrument_id FROM instruments")).all())
+        for line_no, r in enumerate(rows, start=2):
+            sym = r["symbol"].upper()
+            if sym not in ids:
+                raise SeedError(f"{path.name} line {line_no}: unknown symbol {sym}")
+            fixed = Decimal(r["fixed_rate"]) if r.get("fixed_rate") else None
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO swap_terms (instrument_id, effective_date, maturity_date, fixed_rate,
+                                            months_per_period, fixed_rate_source)
+                    VALUES (:i, :e, :m, :k, :p, :src)
+                    ON CONFLICT (instrument_id) DO UPDATE
+                    SET effective_date = EXCLUDED.effective_date, maturity_date = EXCLUDED.maturity_date,
+                        months_per_period = EXCLUDED.months_per_period,
+                        -- keep a par rate already solved for, unless the CSV now gives one explicitly
+                        fixed_rate = COALESCE(EXCLUDED.fixed_rate, swap_terms.fixed_rate),
+                        fixed_rate_source = COALESCE(EXCLUDED.fixed_rate_source, swap_terms.fixed_rate_source)
+                    """
+                ),
+                {
+                    "i": ids[sym], "e": date.fromisoformat(r["effective_date"]),
+                    "m": date.fromisoformat(r["maturity_date"]), "k": fixed,
+                    "p": int(r.get("months_per_period") or 12), "src": "swap_terms.csv" if fixed is not None else None,
+                },
+            )
+    return len(rows)
+
+
 def seed_trades(engine: Engine, path: Path = SEED_DIR / "trades.csv") -> int:
     rows = _read_csv(path)
     with engine.begin() as conn:  # all-or-nothing: a bad row loads no trades

@@ -30,7 +30,7 @@ class PnlRow:
     close: Decimal
     market_value: Decimal
     trade_cash: Decimal
-    income: Decimal              # dividends + coupons
+    income: Decimal              # dividends + coupons + swap payments
     daily_pnl: Decimal
 
 
@@ -133,7 +133,7 @@ def reference_pnl(engine: Engine, portfolio_id: int) -> list[PnlRow]:
             ).all()
             income: dict[date, Decimal] = {}
             for d, t, v in actions:
-                if t in ("cash_dividend", "coupon"):
+                if t in ("cash_dividend", "coupon", "swap_payment"):
                     income[d] = income.get(d, ZERO) + v
             splits = {d: v for d, t, v in actions if t == "split"}
             rows.extend(simulate_position(portfolio_id, iid, trades, closes, income, splits))
