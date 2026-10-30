@@ -1,0 +1,45 @@
+name: Dashboard
+
+# Publishes site/ (the static dashboard and its data snapshot) to GitHub Pages
+# whenever it changes on main. The snapshot is produced locally by
+# `ballast export-site`; no keys or database are involved here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the dashboard data is present
+        run: |
+          test -s site/data/snapshot.json || { echo "site/data/snapshot.json is missing: run ballast export-site"; exit 1; }
+          python3 -c "import json; json.load(open('site/data/snapshot.json')); json.load(open('site/data/openapi.json'))"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
