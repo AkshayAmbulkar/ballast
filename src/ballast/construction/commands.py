@@ -1,32 +1,19 @@
-"""CLI commands for Phase 5: `ballast optimize` and `ballast attribution`."""
+"""CLI commands for Phase 5: `ballast optimize` and `ballast attribution`.
+
+The calculations are in ballast.construction.analysis; these functions print and store them.
+"""
 
 from __future__ import annotations
-
-import math
-from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from ballast.construction.attribution import brinson_fachler, link
-from ballast.construction.black_litterman import View, ViewError, equilibrium_returns, posterior, view_matrices
-from ballast.construction.data import (
-    TRADING_DAYS,
-    ConstructionDataError,
-    load_attribution_inputs,
-    load_universe,
-    parse_benchmark,
-)
-from ballast.construction.optimize import (
-    OptimizationError,
-    describe,
-    frontier,
-    max_sharpe,
-    min_variance,
-    risk_contributions,
-    risk_parity,
-)
+from ballast.construction.analysis import AttributionRun, OptimizationRun, run_attribution, run_optimization
+from ballast.construction.attribution import brinson_fachler
+from ballast.construction.black_litterman import ViewError
+from ballast.construction.data import ConstructionDataError
+from ballast.construction.optimize import OptimizationError
 
 
 def _fmt(df: pd.DataFrame, formats: dict[str, str]) -> str:
@@ -39,77 +26,55 @@ def _fmt(df: pd.DataFrame, formats: dict[str, str]) -> str:
 
 def cmd_optimize(engine: Engine, args) -> int:
     try:
-        u = load_universe(engine, args.portfolio, args.lookback)
-        views = [View.parse(v) for v in (args.view or [])]
-        P, Q = view_matrices(views, u.symbols) if views else (None, None)
+        run = run_optimization(engine, args.portfolio, args.lookback, args.max_weight, args.view,
+                               args.delta, args.tau)
     except (ConstructionDataError, ViewError) as exc:
         print(f"Cannot optimize: {exc}")
         return 1
-    # Reverse optimization gives returns in excess of the risk-free rate. Absolute views are stated
-    # as total returns, so the risk-free rate is taken off them; in relative views it cancels.
-    pi = equilibrium_returns(u.cov, u.current_weights, args.delta)
-    Q_excess = None if Q is None else Q - u.risk_free * P.sum(axis=1)
-    post = posterior(pi, u.cov, args.tau, P, Q_excess)
-    mu = u.risk_free + post.mean                     # total expected returns
+    except OptimizationError as exc:
+        name, _, detail = str(exc).partition(": ")
+        print(f"Optimization failed ({name}): {detail}")
+        return 1
+    u = run.universe
 
     print(f"\nPortfolio construction: {args.portfolio} as of {u.as_of}")
     print(f"{len(u.symbols)} stocks and ETFs; {u.lookback_days} days of returns from {u.start}; "
           f"risk-free {u.risk_free:.2%} (3-month Treasury)")
     print("Expected returns, total % a year. implied = returns that make today's weights optimal;")
     print("bl_return = Black-Litterman blend of implied with "
-          + (f"view(s) {'; '.join(args.view)}" if views else "no views (equal to implied)") + "\n")
+          + (f"view(s) {'; '.join(run.view_text)}" if run.views else "no views (equal to implied)") + "\n")
     print(_fmt(pd.DataFrame({
         "symbol": u.symbols, "weight_now": u.current_weights * 100, "hist_return": u.mean * 100,
-        "volatility": np.sqrt(np.diag(u.cov)) * 100, "implied": (u.risk_free + pi) * 100, "bl_return": mu * 100,
+        "volatility": np.sqrt(np.diag(u.cov)) * 100, "implied": (u.risk_free + run.implied_excess) * 100,
+        "bl_return": run.expected * 100,
     }), {k: "{:.1f}" for k in ("weight_now", "hist_return", "volatility", "implied", "bl_return")}))
 
-    steps = {
-        "min_variance": lambda: min_variance(u.cov, args.max_weight),
-        "max_sharpe": lambda: max_sharpe(mu, u.cov, u.risk_free, args.max_weight),
-        "risk_parity": lambda: risk_parity(u.cov),
-        "max_sharpe_hist": lambda: max_sharpe(u.mean, u.cov, u.risk_free, args.max_weight),
-        "frontier": lambda: frontier(mu, u.cov, points=8, max_weight=args.max_weight),
-    }
-    weights = {"current": u.current_weights}
-    for name, solve in steps.items():
-        try:
-            result = solve()
-        except OptimizationError as exc:
-            print(f"Optimization failed ({name}): {exc}")
-            return 1
-        if name == "frontier":
-            curve = result
-        else:
-            weights[name] = result
-
-    stats = {k: describe(w, mu, u.cov, u.risk_free) for k, w in weights.items()}
     print(f"\nPortfolios (long-only, max {args.max_weight:.0%} per asset; risk parity is unconstrained by the cap).")
     print("Return and Sharpe use the Black-Litterman returns; max_sharpe_hist uses raw historical means.\n")
     print(_fmt(pd.DataFrame([{"portfolio": k, "exp_return": s.expected_return * 100, "volatility": s.volatility * 100,
                                "sharpe": s.sharpe, "largest": u.symbols[int(np.argmax(s.weights))],
-                               "largest_pct": float(np.max(s.weights)) * 100} for k, s in stats.items()]),
+                               "largest_pct": float(np.max(s.weights)) * 100} for k, s in run.stats.items()]),
                {"exp_return": "{:.2f}", "volatility": "{:.2f}", "sharpe": "{:.2f}", "largest_pct": "{:.1f}"}))
 
     print("\nWeights (%):\n")
-    table = pd.DataFrame({k: w * 100 for k, w in weights.items()}, index=u.symbols).T.reset_index(names="portfolio")
+    table = pd.DataFrame({k: w * 100 for k, w in run.weights.items()}, index=u.symbols).T.reset_index(names="portfolio")
     print(_fmt(table, {s: "{:.1f}" for s in u.symbols}))
-    rc = risk_contributions(weights["current"], u.cov)
     print("\nShare of today's portfolio risk by asset (%): "
-          + ", ".join(f"{s} {x * 100:.0f}" for s, x in sorted(zip(u.symbols, rc), key=lambda t: -t[1])))
+          + ", ".join(f"{s} {x * 100:.0f}" for s, x in sorted(zip(u.symbols, run.risk_share), key=lambda t: -t[1])))
 
     print("\nEfficient frontier (Black-Litterman returns):\n")
-    print(_fmt(pd.DataFrame([{"exp_return": describe(w, mu, u.cov, u.risk_free).expected_return * 100,
-                               "volatility": describe(w, mu, u.cov, u.risk_free).volatility * 100,
-                               "sharpe": describe(w, mu, u.cov, u.risk_free).sharpe} for w in curve]),
+    print(_fmt(pd.DataFrame([{"exp_return": p.expected_return * 100, "volatility": p.volatility * 100,
+                               "sharpe": p.sharpe} for p in run.frontier]),
                {"exp_return": "{:.2f}", "volatility": "{:.2f}", "sharpe": "{:.2f}"}))
-    _save_optimization(engine, args, u, stats, views)
+    _save_optimization(engine, args.portfolio, run)
     return 0
 
 
-def _save_optimization(engine: Engine, args, u, stats, views) -> None:
+def _save_optimization(engine: Engine, portfolio: str, run: OptimizationRun) -> None:
+    u = run.universe
     with engine.begin() as conn:
-        pid = conn.execute(text("SELECT portfolio_id FROM portfolios WHERE name = :n"), {"n": args.portfolio}).scalar_one()
-        for method, s in stats.items():
+        pid = conn.execute(text("SELECT portfolio_id FROM portfolios WHERE name = :n"), {"n": portfolio}).scalar_one()
+        for method, s in run.stats.items():
             run_id = conn.execute(
                 text(
                     """
@@ -120,7 +85,7 @@ def _save_optimization(engine: Engine, args, u, stats, views) -> None:
                 ),
                 {"p": pid, "d": u.as_of, "m": method, "r": s.expected_return, "v": s.volatility,
                  "s": None if s.sharpe != s.sharpe else s.sharpe, "rf": u.risk_free, "lb": u.lookback_days,
-                 "mw": args.max_weight, "views": "; ".join(args.view or []) or None},
+                 "mw": run.max_weight, "views": "; ".join(run.view_text) or None},
             ).scalar_one()
             conn.execute(
                 text("INSERT INTO optimization_weights (run_id, instrument_id, weight) VALUES (:r, :i, :w)"),
@@ -130,69 +95,50 @@ def _save_optimization(engine: Engine, args, u, stats, views) -> None:
 
 def cmd_attribution(engine: Engine, args) -> int:
     try:
-        bench = parse_benchmark(args.benchmark)
-        a = load_attribution_inputs(engine, args.portfolio, bench, args.since)
+        run = run_attribution(engine, args.portfolio, args.benchmark, args.since)
     except (ConstructionDataError, ValueError) as exc:
         print(f"Cannot run attribution: {exc}")
         return 1
-    daily = [{"w": a.port_weights[t], "r": a.port_returns[t], "W": a.bench_weights, "b": a.bench_returns[t]}
-             for t in range(len(a.days))]
-    total = link(daily, a.segments)
-    years = defaultdict(list)
-    for d, item in zip(a.days, daily):
-        years[d.year].append(item)
-
-    p, bmk = a.portfolio_daily, a.benchmark_daily
-    n = len(a.days)
-    ann = lambda R: (1 + R) ** (TRADING_DAYS / n) - 1
-    te = float(np.std(p - bmk, ddof=1) * math.sqrt(TRADING_DAYS))
-    active_ann = ann(total.portfolio_return) - ann(total.benchmark_return)
+    a = run.inputs
     print(f"\nPerformance attribution: {args.portfolio} vs benchmark {args.benchmark} (rebalanced daily)")
-    print(f"{n} days, {a.days[0]} to {a.days[-1]}\n")
+    print(f"{len(a.days)} days, {a.days[0]} to {a.days[-1]}\n")
     print(_fmt(pd.DataFrame([
-        {"": "portfolio", "total_return": total.portfolio_return * 100, "annualized": ann(total.portfolio_return) * 100,
-         "volatility": float(np.std(p, ddof=1) * math.sqrt(TRADING_DAYS)) * 100},
-        {"": "benchmark", "total_return": total.benchmark_return * 100, "annualized": ann(total.benchmark_return) * 100,
-         "volatility": float(np.std(bmk, ddof=1) * math.sqrt(TRADING_DAYS)) * 100},
+        {"": name, "total_return": s.total_return * 100, "annualized": s.annualized * 100, "volatility": s.volatility * 100}
+        for name, s in (("portfolio", run.portfolio), ("benchmark", run.benchmark))
     ]), {"total_return": "{:+.2f}", "annualized": "{:+.2f}", "volatility": "{:.2f}"}))
-    print(f"\nActive return {(total.portfolio_return - total.benchmark_return) * 100:+.2f}% "
-          f"({active_ann * 100:+.2f}% a year); tracking error {te * 100:.2f}%; "
-          f"information ratio {active_ann / te:.2f}")
+    print(f"\nActive return {run.active_return * 100:+.2f}% ({run.active_annualized * 100:+.2f}% a year); "
+          f"tracking error {run.tracking_error * 100:.2f}%; information ratio {run.information_ratio:.2f}")
 
     print("\nBrinson-Fachler attribution, whole period (percentage points, Carino-linked):\n")
-    eff = total.effects.reset_index(names="segment")
+    eff = run.linked.effects.reset_index(names="segment")
     eff.loc[len(eff)] = ["TOTAL", *eff[["allocation", "selection", "interaction", "total"]].sum().tolist()]
     print(_fmt(eff.assign(**{c: eff[c] * 100 for c in ("allocation", "selection", "interaction", "total")}),
                {c: "{:+.2f}" for c in ("allocation", "selection", "interaction", "total")}))
 
     print("\nBy year (percentage points):\n")
-    rows = []
-    for y, items in sorted(years.items()):
-        res = link(items, a.segments)
-        e = res.effects.sum()
-        rows.append({"year": y, "portfolio": res.portfolio_return * 100, "benchmark": res.benchmark_return * 100,
-                     "allocation": e.allocation * 100, "selection": e.selection * 100,
-                     "interaction": e.interaction * 100})
-    print(_fmt(pd.DataFrame(rows), {c: "{:+.2f}" for c in ("portfolio", "benchmark", "allocation", "selection",
-                                                           "interaction")}))
+    print(_fmt(pd.DataFrame([{"year": y.year, "portfolio": y.portfolio_return * 100, "benchmark": y.benchmark_return * 100,
+                               "allocation": y.allocation * 100, "selection": y.selection * 100,
+                               "interaction": y.interaction * 100} for y in run.by_year]),
+               {c: "{:+.2f}" for c in ("portfolio", "benchmark", "allocation", "selection", "interaction")}))
     print("\nallocation = over/underweighting segments that beat/lagged the benchmark;")
     print("selection = holdings beating/lagging their own segment's benchmark.")
-    _save_attribution(engine, args, a)
+    _save_attribution(engine, args.portfolio, run)
     return 0
 
 
-def _save_attribution(engine: Engine, args, a) -> None:
+def _save_attribution(engine: Engine, portfolio: str, run: AttributionRun) -> None:
+    a = run.inputs
     rows = []
     for t, d in enumerate(a.days):
         e = brinson_fachler(a.port_weights[t], a.port_returns[t], a.bench_weights, a.bench_returns[t])
         for j, seg in enumerate(a.segments):
-            rows.append({"d": d, "s": seg, "bm": args.benchmark, "pw": a.port_weights[t, j], "pr": a.port_returns[t, j],
-                         "bw": a.bench_weights[j], "br": a.bench_returns[t, j], "al": e["allocation"][j],
-                         "se": e["selection"][j], "it": e["interaction"][j]})
+            rows.append({"d": d, "s": seg, "bm": run.benchmark_text, "pw": a.port_weights[t, j],
+                         "pr": a.port_returns[t, j], "bw": a.bench_weights[j], "br": a.bench_returns[t, j],
+                         "al": e["allocation"][j], "se": e["selection"][j], "it": e["interaction"][j]})
     with engine.begin() as conn:
-        pid = conn.execute(text("SELECT portfolio_id FROM portfolios WHERE name = :n"), {"n": args.portfolio}).scalar_one()
+        pid = conn.execute(text("SELECT portfolio_id FROM portfolios WHERE name = :n"), {"n": portfolio}).scalar_one()
         conn.execute(text("DELETE FROM attribution_daily WHERE portfolio_id = :p AND benchmark = :b"),
-                     {"p": pid, "b": args.benchmark})
+                     {"p": pid, "b": run.benchmark_text})
         conn.execute(
             text(
                 """

@@ -207,6 +207,10 @@ def test_view_parsing():
         View.parse("NVDA")
     with pytest.raises(ViewError):
         view_matrices([View.parse("TSLA:0.1")], ["SPY"])
+    with pytest.raises(ViewError, match="two different assets"):
+        view_matrices([View.parse("SPY-SPY:0.05")], ["SPY"])
+    with pytest.raises(ViewError):
+        view_matrices([View.parse("SPY:inf")], ["SPY"])
 
 
 # ---------- attribution ----------

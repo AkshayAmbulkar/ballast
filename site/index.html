@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Everything is served from this site: no third-party scripts, fonts, trackers or cookies. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Ballast portfolio risk</title>
+  <meta name="description" content="Ballast: positions, P&L, fixed income, derivatives, Value-at-Risk, portfolio construction and attribution for a multi-asset portfolio, computed in Python and PostgreSQL.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+  <script type="module" src="assets/app.mjs"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="masthead">
+    <div class="wrap masthead-row">
+      <a class="wordmark" href="#overview">
+        <svg class="wordmark-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 20h24M7 20l3 7h12l3-7M16 4v16M16 4l-7 11h7"/></svg>
+        <span>Ballast</span>
+      </a>
+      <p class="masthead-note" id="as-of">Loading data</p>
+      <nav class="masthead-links" aria-label="Project">
+        <a href="https://github.com/AkshayAmbulkar/ballast" rel="noopener">Source code</a>
+        <a href="https://github.com/AkshayAmbulkar/ballast/tree/main/docs/methodology" rel="noopener">Methodology</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-pressed="false">Dark mode</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-text">
+      <div class="wrap">
+        <p class="hero-text" id="hero-text">Loading the latest snapshot of the Ballast Core portfolio.</p>
+        <figure class="waterline" id="hero-chart" aria-describedby="hero-caption"></figure>
+        <p class="hero-caption" id="hero-caption"></p>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Sections">
+      <div class="wrap tabs-row">
+        <a href="#overview">Overview</a>
+        <a href="#rates">Rates</a>
+        <a href="#derivatives">Options and swap</a>
+        <a href="#risk">Risk</a>
+        <a href="#construction">Construction</a>
+        <a href="#attribution">Attribution</a>
+        <a href="#checks">Model checks</a>
+        <a href="#api">API</a>
+      </div>
+    </nav>
+
+    <div class="wrap panels">
+      <section class="panel" id="overview" aria-labelledby="h-overview" hidden>
+        <h2 id="h-overview">Overview</h2>
+        <p class="lede" id="overview-lede"></p>
+        <div class="grid-2-1">
+          <figure class="chart" id="pnl-chart"></figure>
+          <figure class="chart" id="class-chart"></figure>
+        </div>
+        <h3>Holdings</h3>
+        <div class="table-scroll" id="holdings-table"></div>
+        <p class="note">Quantities: shares; bonds in $100-face units; options in shares covered (100 per contract); the swap in notional/100, negative when paying fixed. Bond prices include accrued interest.</p>
+      </section>
+
+      <section class="panel" id="rates" aria-labelledby="h-rates" hidden>
+        <h2 id="h-rates">Rates</h2>
+        <p class="lede" id="rates-lede"></p>
+        <div class="grid-2">
+          <figure class="chart" id="curve-chart"></figure>
+          <figure class="chart" id="keyrate-chart"></figure>
+        </div>
+        <h3>Treasury holdings</h3>
+        <div class="table-scroll" id="bonds-table"></div>
+        <h3>SOFR swap</h3>
+        <div class="table-scroll" id="swaps-table"></div>
+        <h3>Rate scenarios</h3>
+        <p class="note">Full revaluation off a shocked curve, against the first-order key-rate estimate. The gap is convexity.</p>
+        <div class="table-scroll" id="scenarios-table"></div>
+      </section>
+
+      <section class="panel" id="derivatives" aria-labelledby="h-derivatives" hidden>
+        <h2 id="h-derivatives">Options and swap</h2>
+        <p class="lede" id="derivatives-lede"></p>
+        <div class="table-scroll" id="options-table"></div>
+        <div class="grid-2">
+          <figure class="chart" id="exposure-chart"></figure>
+          <div>
+            <h3>Delta-adjusted exposure</h3>
+            <div class="table-scroll" id="exposure-table"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="risk" aria-labelledby="h-risk" hidden>
+        <h2 id="h-risk">Risk</h2>
+        <p class="lede" id="risk-lede"></p>
+        <div class="table-scroll" id="var-table"></div>
+        <figure class="chart chart-wide" id="backtest-chart"></figure>
+        <h3>Backtest tests</h3>
+        <div class="table-scroll" id="backtest-table"></div>
+        <p class="note">p-values below 0.05 reject the model. Kupiec: wrong number of exceptions. Christoffersen: exceptions cluster together. Conditional coverage: both. Basel zone: exceptions in the latest 250 days (green 0 to 4, yellow 5 to 9, red 10 or more).</p>
+        <div class="grid-2">
+          <figure class="chart" id="stress-chart"></figure>
+          <figure class="chart" id="standalone-chart"></figure>
+        </div>
+        <h3>Stress episodes</h3>
+        <div class="table-scroll" id="stress-table"></div>
+      </section>
+
+      <section class="panel" id="construction" aria-labelledby="h-construction" hidden>
+        <h2 id="h-construction">Construction</h2>
+        <p class="lede" id="construction-lede"></p>
+        <div class="grid-2">
+          <figure class="chart" id="frontier-chart"></figure>
+          <form class="views" id="views-form" novalidate>
+            <h3>Try your own views</h3>
+            <p class="note">Black-Litterman blends the returns implied by today's weights with your views, then finds the long-only portfolio with the best Sharpe ratio (max <span data-field="cap"></span> per asset). It runs in your browser with the same maths as the Python engine.</p>
+            <div id="view-rows"></div>
+            <div class="views-actions">
+              <button type="button" id="add-view">Add a view</button>
+              <button type="button" id="preset-nvda">NVDA beats SPY by 5%</button>
+              <button type="button" id="preset-tlt">TLT returns 8%</button>
+              <button type="button" id="clear-views">Clear</button>
+            </div>
+            <p class="form-error" id="views-error" role="alert"></p>
+          </form>
+        </div>
+        <figure class="chart chart-wide" id="views-chart"></figure>
+        <h3>Assets</h3>
+        <div class="table-scroll" id="assets-table"></div>
+        <h3>Portfolio weights</h3>
+        <div class="table-scroll" id="weights-table"></div>
+      </section>
+
+      <section class="panel" id="attribution" aria-labelledby="h-attribution" hidden>
+        <h2 id="h-attribution">Attribution</h2>
+        <p class="lede" id="attribution-lede"></p>
+        <figure class="chart chart-wide" id="growth-chart"></figure>
+        <div class="grid-2">
+          <div>
+            <h3>Where the difference came from</h3>
+            <div class="table-scroll" id="effects-table"></div>
+          </div>
+          <div>
+            <h3>By year</h3>
+            <div class="table-scroll" id="years-table"></div>
+          </div>
+        </div>
+        <p class="note">Brinson-Fachler effects, linked across days with Carino's method so they add up exactly to the cumulative active return. Allocation: over- or underweighting segments that beat or lagged the benchmark. Selection: holdings beating or lagging their own segment's benchmark.</p>
+      </section>
+
+      <section class="panel" id="checks" aria-labelledby="h-checks" hidden>
+        <h2 id="h-checks">Model checks</h2>
+        <p class="lede">Each model is tested against something published independently. The live checks below use this snapshot's data; the rest run on every commit in the test suite.</p>
+        <ul class="checks" id="checks-list"></ul>
+      </section>
+
+      <section class="panel" id="api" aria-labelledby="h-api" hidden>
+        <h2 id="h-api">API</h2>
+        <p class="lede">Every number on this page also comes from a read-only REST API. Run <code>ballast serve</code> and open <code>http://127.0.0.1:8000/api/docs</code> to call it; the reference below is generated from the same OpenAPI schema.</p>
+        <div id="api-reference"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>Ballast Core is an illustrative portfolio, not investment advice. Market data from Yahoo Finance (through yfinance) and FRED, Federal Reserve Bank of St. Louis. Treasury and swap positions are priced off the bootstrapped Treasury curve; options are model-marked.</p>
+      <p id="generated"></p>
+    </div>
+  </footer>
+  <div class="tooltip" id="tooltip" role="status" hidden></div>
+</body>
+</html>

@@ -58,6 +58,10 @@ def view_matrices(views: list[View], symbols: list[str]) -> tuple[np.ndarray, np
         for s in (v.long, v.short):
             if s is not None and s not in symbols:
                 raise ViewError(f"{s} is not in the universe {symbols}")
+        if v.long == v.short:
+            raise ViewError(f"a relative view needs two different assets, got {v.long}-{v.short}")
+        if not np.isfinite(v.expected) or abs(v.expected) > 10:
+            raise ViewError(f"view return {v.expected} is outside -1000%..+1000% a year")
         P[k, symbols.index(v.long)] = 1.0
         if v.short:
             P[k, symbols.index(v.short)] = -1.0

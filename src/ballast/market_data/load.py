@@ -99,7 +99,7 @@ def load_prices(
     for instrument_id, symbol in instruments:
         if wanted is not None and symbol not in wanted:
             continue
-        history = yahoo.to_as_traded(fetch(symbol, start, repair))
+        history = yahoo.drop_unfinished_session(yahoo.to_as_traded(fetch(symbol, start, repair)))
         with engine.begin() as conn:
             result[symbol] = upsert_prices(conn, instrument_id, history, source="yahoo")
             upsert_corporate_actions(conn, instrument_id, history, source="yahoo")

@@ -3,6 +3,7 @@
 **A multi-asset portfolio risk platform built on PostgreSQL and Python.**
 
 [![CI](https://github.com/AkshayAmbulkar/ballast/actions/workflows/ci.yml/badge.svg)](https://github.com/AkshayAmbulkar/ballast/actions/workflows/ci.yml)
+[![Dashboard](https://github.com/AkshayAmbulkar/ballast/actions/workflows/pages.yml/badge.svg)](https://akshayambulkar.github.io/ballast/)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-16-336791)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -10,6 +11,19 @@
 Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap, and answers the questions a buy-side risk team asks every morning: *what do we own, what did we make, and what could we lose?* Every model runs on the same portfolio and the same database, so pricing, risk and performance numbers are consistent with each other.
 
 > A ship's ballast keeps it steady in rough water. Risk management does the same for a portfolio.
+
+**[Open the live dashboard](https://akshayambulkar.github.io/ballast/)**: holdings and P&L, the Treasury curve and rate risk, option Greeks, VaR with its backtest, stress tests, an efficient frontier where you can try your own Black-Litterman views, performance attribution, and the checks against published figures. Product thinking is in the [PRD](docs/product/PRD.md).
+
+```mermaid
+flowchart LR
+    S[Yahoo Finance · FRED · trade ledger] --> L[Loaders]
+    L --> DB[(PostgreSQL<br/>prices, trades, curves,<br/>positions and P&L views)]
+    DB --> M[Models<br/>bonds · options · swaps · VaR<br/>optimizers · attribution]
+    M --> SV[Service layer]
+    SV --> CLI[ballast CLI]
+    SV --> API[REST API]
+    SV --> EX[export-site] --> D[Dashboard on GitHub Pages]
+```
 
 ## Roadmap
 
@@ -20,7 +34,7 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 | 3 | **Derivatives:** Black-Scholes and binomial pricing, Greeks, implied volatility smile, SOFR compounding, SOFR swap valuation and hedging | ✅ Done |
 | 4 | **Risk:** historical, parametric and Monte Carlo VaR and Expected Shortfall, Kupiec and Christoffersen backtests, Basel traffic light, historical stress tests | ✅ Done |
 | 5 | **Portfolio construction:** mean-variance and efficient frontier, Black-Litterman with views, risk parity, Brinson-Fachler attribution with Carino linking | ✅ Done |
-| 6 | **Product:** dashboard, API, PRD and deployment | Planned |
+| 6 | **Product:** read-only REST API, published dashboard with in-browser Black-Litterman, PRD, CI/CD to GitHub Pages | ✅ Done |
 
 ## What Phase 1 does
 
@@ -80,6 +94,14 @@ Definitions, tests and limitations: [docs/methodology/04-risk.md](docs/methodolo
 - **Performance attribution.** Daily Brinson-Fachler allocation, selection and interaction effects against a 60/40 SPY/TLT benchmark, Carino-linked so they add up exactly to the cumulative active return, with tracking error and information ratio.
 
 Definitions, tests and limitations: [docs/methodology/05-construction.md](docs/methodology/05-construction.md).
+
+## What Phase 6 does
+
+- **One service layer.** Every report is computed once, in `ballast.service`, and returned as typed JSON; the CLI, the API and the dashboard all draw from it, so they always agree.
+- **REST API.** `ballast serve` starts a read-only FastAPI service with typed schemas and interactive docs at `http://127.0.0.1:8000/api/docs`: summary, curve, rate risk, Greeks, VaR, backtest, stress, optimization (with `?view=NVDA-SPY:0.05`), attribution and validation. It answers only requests addressed to this computer, and bounds every parameter.
+- **Published dashboard.** `ballast export-site` writes a snapshot of every report to `site/data/`; a GitHub Actions workflow publishes `site/` to GitHub Pages. The page is hand-built HTML, CSS and SVG with no outside scripts, fonts or trackers, works on phones, and has light and dark modes and a table view for every chart.
+- **Try your own views.** The dashboard's Construction tab re-runs Black-Litterman and the capped max-Sharpe optimizer in the browser; a test runs it against the Python engine and requires agreement to 10⁻⁶.
+- **Product requirements.** [docs/product/PRD.md](docs/product/PRD.md): users, jobs to be done, goals and non-goals, success metrics, requirements with automated acceptance criteria, risks and a RICE-scored roadmap.
 
 ## Design decisions
 
@@ -169,7 +191,20 @@ docker compose up -d
 
 # 4. Build everything: schema, market data, curves, model marks, trades, checks, report, risk
 ballast bootstrap
+
+# 5. Optional: the dashboard and API on this computer
+ballast export-site     # writes site/data/ from your database
+ballast serve           # http://127.0.0.1:8000 (dashboard) and /api/docs (API)
 ```
+
+### Refreshing the published dashboard
+
+```bash
+ballast bootstrap       # reload market data and recompute everything
+ballast export-site     # rewrite site/data/snapshot.json and openapi.json
+```
+
+Then upload the two files in `site/data/` to the same folder on GitHub; the Dashboard workflow republishes the site in about a minute. Prices are stored only for finished sessions: while the U.S. market is open, today's unfinished bar is skipped, so a refresh never records an intraday price as a close.
 
 If `~/.config` is not writable on your machine, keep `secrets.env` in any private folder and point Ballast at it, for example `echo 'export BALLAST_CONFIG_DIR="$HOME/.ballast"' >> ~/.zshrc`.
 
@@ -199,6 +234,8 @@ If `~/.config` is not writable on your machine, keep `secrets.env` in any privat
 | `ballast optimize [--view NVDA-SPY:0.05 --max-weight 0.35]` | Min-variance, max-Sharpe, risk-parity and Black-Litterman portfolios, plus the efficient frontier |
 | `ballast attribution [--benchmark SPY:0.6,TLT:0.4]` | Brinson-Fachler attribution, tracking error and information ratio |
 | `ballast rate-sensitivity [--symbol TLT --series DGS20 --since DATE]` | Empirical duration of an ETF against a Treasury yield |
+| `ballast export-site` | Write the dashboard's data (`site/data/snapshot.json`, `openapi.json`) for publishing |
+| `ballast serve [--port 8000]` | Run the REST API and the dashboard on `127.0.0.1` |
 | `ballast bootstrap` | Run all of the above in order |
 
 ## Tests
@@ -219,6 +256,9 @@ The suite runs against a real PostgreSQL database (`ballast_test`, created autom
 - Hull's Black-Scholes, Greeks and binomial-tree examples, the NY Fed's SOFR Index worked example, swap valuation identities, a negative swap payment flowing through P&L, and recovery of a known volatility skew from a synthetic option chain
 - VaR and ES definitions, normal constants (2.326σ, 2.665σ), Monte Carlo against the closed form, the RiskMetrics EWMA recursion, Kupiec against an independent binomial likelihood ratio, clustered exceptions caught by Christoffersen, and historical VaR from the database equal to a hand calculation
 - optimizers against closed forms, risk parity equalising risk contributions, He and Litterman's published Black-Litterman example, Brinson-Fachler effects summing to the active return, and Carino linking over 500 days
+- every API endpoint against its schema and the database, clear 404/409/422 errors for bad input, read-only routes, and rejection of requests addressed to other hosts
+- the dashboard export: valid public files, refusal to publish a portfolio that is not the public sample, and detection of paths, emails and keys in its output
+- the dashboard's in-browser Black-Litterman and optimizer against the Python engine (with Node.js), and a page that loads nothing from other websites
 - the security guarantees below: no key in error messages, secrets outside the repository, localhost-only database, a test suite that refuses to touch any database not named `*_test`
 
 CI runs the suite on Python 3.10 and 3.12 against PostgreSQL 16 on every push.
@@ -232,6 +272,9 @@ Ballast is designed so that nothing personal or secret can leave your computer b
 - **The database is reachable from this computer only.** Docker publishes PostgreSQL on `127.0.0.1`, not on your network, and mounts no folders from your computer.
 - **Your own trades stay private.** Put real trades in `data/private/` (git-ignored) and load them with `ballast seed-trades --file data/private/trades.csv`. Never put them in `data/seed/`, which is public.
 - **Tests cannot wipe real data.** The test suite rebuilds its database from scratch, so it refuses to run unless the database name ends in `_test`.
+- **The API stays on your computer.** `ballast serve` listens on `127.0.0.1` and refuses other addresses unless you add `--allow-remote`. It answers only requests addressed to this computer, which also blocks DNS-rebinding attacks from web pages in your browser, and it has no endpoint that writes.
+- **The published dashboard contains only the public sample portfolio.** `ballast export-site` refuses to export a portfolio whose trades differ from `data/seed/trades.csv`, and refuses to write any file containing a path on your computer, an email address, the database URL or your FRED key.
+- **The dashboard loads nothing from other websites.** No third-party scripts, fonts, analytics or cookies; a Content-Security-Policy enforces it.
 
 What does leave your computer: requests to Yahoo Finance (the ticker symbols you load) and to FRED (your API key and the series IDs). See [SECURITY.md](SECURITY.md) for details.
 
@@ -242,8 +285,14 @@ ballast/
 ├── db/migrations/          numbered SQL migrations (schema, views, checks)
 ├── data/seed/              instrument master and trade ledger (CSV)
 ├── docs/methodology/       definitions, worked examples, limitations
+├── docs/product/PRD.md     product requirements
+├── site/                   the dashboard (static HTML, CSS, JS) and its data snapshot
 ├── src/ballast/
 │   ├── cli.py              `ballast` command-line interface
+│   ├── service.py          every report as JSON-ready data (shared by CLI, API, dashboard)
+│   ├── api/                FastAPI app and response schemas
+│   ├── export.py           dashboard snapshot export, with privacy checks
+│   ├── validation.py       checks against published figures (SOFR, ETF duration)
 │   ├── db.py               engine and migration runner
 │   ├── construction/       optimizers, Black-Litterman, performance attribution
 │   ├── derivatives/        options, Greeks, implied volatility, SOFR compounding, swaps

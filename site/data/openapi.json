@@ -1,0 +1,2656 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "Ballast API",
+  "description": "\nPositions, P&L, fixed income, derivatives, Value-at-Risk, portfolio construction and\nperformance attribution for the portfolios in a Ballast database.\n\nAll endpoints are read-only. Money is in US dollars; returns, volatilities, weights and\nrates are decimals (0.05 = 5%) unless a field name ends in `_pct` or `_bp`.\nMethodology: https://github.com/AkshayAmbulkar/ballast/tree/main/docs/methodology\n",
+  "version": "0.1.0"
+ },
+ "paths": {
+  "/api/health": {
+   "get": {
+    "tags": [
+     "service"
+    ],
+    "summary": "Health",
+    "operationId": "health_api_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Health"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Portfolios",
+    "operationId": "portfolios_api_portfolios_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/PortfolioInfo"
+         },
+         "type": "array",
+         "title": "Response Portfolios Api Portfolios Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/summary": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Holdings, P&L and daily history",
+    "operationId": "summary_api_portfolios__portfolio__summary_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Summary"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/curves/treasury": {
+   "get": {
+    "tags": [
+     "fixed income"
+    ],
+    "summary": "Bootstrapped Treasury curve (latest, or on a date)",
+    "operationId": "treasury_curve_api_curves_treasury_get",
+    "parameters": [
+     {
+      "name": "date",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Date"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TreasuryCurve"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/rates-risk": {
+   "get": {
+    "tags": [
+     "fixed income"
+    ],
+    "summary": "Bond and swap pricing, duration, DV01, key rates and scenarios",
+    "operationId": "rates_risk_api_portfolios__portfolio__rates_risk_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RatesRisk"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/greeks": {
+   "get": {
+    "tags": [
+     "derivatives"
+    ],
+    "summary": "Option Greeks and delta-adjusted equity exposure",
+    "operationId": "greeks_api_portfolios__portfolio__greeks_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Greeks"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/var": {
+   "get": {
+    "tags": [
+     "risk"
+    ],
+    "summary": "1-day VaR and Expected Shortfall: historical, parametric and Monte Carlo",
+    "operationId": "value_at_risk_api_portfolios__portfolio__var_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     },
+     {
+      "name": "confidence",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "maximum": 0.999,
+       "minimum": 0.5,
+       "default": 0.99,
+       "title": "Confidence"
+      }
+     },
+     {
+      "name": "lookback",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 2500,
+       "minimum": 250,
+       "description": "trading days of history",
+       "default": 500,
+       "title": "Lookback"
+      },
+      "description": "trading days of history"
+     },
+     {
+      "name": "simulations",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100000,
+       "minimum": 1000,
+       "default": 10000,
+       "title": "Simulations"
+      }
+     },
+     {
+      "name": "seed",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 2147483647,
+       "minimum": 0,
+       "default": 7,
+       "title": "Seed"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ValueAtRisk"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/backtest": {
+   "get": {
+    "tags": [
+     "risk"
+    ],
+    "summary": "Daily VaR backtest with Kupiec, Christoffersen and Basel tests (slow)",
+    "operationId": "backtest_api_portfolios__portfolio__backtest_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     },
+     {
+      "name": "confidence",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "maximum": 0.999,
+       "minimum": 0.5,
+       "default": 0.99,
+       "title": "Confidence"
+      }
+     },
+     {
+      "name": "lookback",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 2500,
+       "minimum": 250,
+       "default": 500,
+       "title": "Lookback"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Backtest"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/stress": {
+   "get": {
+    "tags": [
+     "risk"
+    ],
+    "summary": "Historical market episodes replayed on today's portfolio",
+    "operationId": "stress_api_portfolios__portfolio__stress_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Stress"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/optimization": {
+   "get": {
+    "tags": [
+     "construction"
+    ],
+    "summary": "Min-variance, max-Sharpe, risk parity, Black-Litterman and frontier",
+    "operationId": "optimization_api_portfolios__portfolio__optimization_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     },
+     {
+      "name": "view",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       },
+       "maxItems": 10,
+       "description": "NVDA:0.25 (NVDA returns 25%/yr) or NVDA-SPY:0.05 (beats SPY by 5%/yr); repeatable",
+       "default": [],
+       "title": "View"
+      },
+      "description": "NVDA:0.25 (NVDA returns 25%/yr) or NVDA-SPY:0.05 (beats SPY by 5%/yr); repeatable"
+     },
+     {
+      "name": "lookback",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 5000,
+       "minimum": 120,
+       "default": 756,
+       "title": "Lookback"
+      }
+     },
+     {
+      "name": "max_weight",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "maximum": 1,
+       "exclusiveMinimum": 0,
+       "default": 0.35,
+       "title": "Max Weight"
+      }
+     },
+     {
+      "name": "delta",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "maximum": 20,
+       "exclusiveMinimum": 0,
+       "description": "risk aversion",
+       "default": 2.5,
+       "title": "Delta"
+      },
+      "description": "risk aversion"
+     },
+     {
+      "name": "tau",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "maximum": 1,
+       "exclusiveMinimum": 0,
+       "default": 0.05,
+       "title": "Tau"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Optimization"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/portfolios/{portfolio}/attribution": {
+   "get": {
+    "tags": [
+     "construction"
+    ],
+    "summary": "Brinson-Fachler attribution against a benchmark, Carino-linked",
+    "operationId": "attribution_api_portfolios__portfolio__attribution_get",
+    "parameters": [
+     {
+      "name": "portfolio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Portfolio"
+      }
+     },
+     {
+      "name": "benchmark",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "maxLength": 200,
+       "description": "e.g. SPY:0.6,TLT:0.4",
+       "default": "SPY:0.6,TLT:0.4",
+       "title": "Benchmark"
+      },
+      "description": "e.g. SPY:0.6,TLT:0.4"
+     },
+     {
+      "name": "since",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string",
+         "format": "date"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Since"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Attribution"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Unknown portfolio",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Data not loaded yet (run `ballast bootstrap`)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Invalid parameters",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/validation": {
+   "get": {
+    "tags": [
+     "validation"
+    ],
+    "summary": "SOFR compounding vs the NY Fed; TLT empirical duration",
+    "operationId": "validation_api_validation_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Validation"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Asset": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "weight_now": {
+      "type": "number",
+      "title": "Weight Now"
+     },
+     "hist_return": {
+      "type": "number",
+      "title": "Hist Return"
+     },
+     "volatility": {
+      "type": "number",
+      "title": "Volatility"
+     },
+     "implied_return": {
+      "type": "number",
+      "title": "Implied Return",
+      "description": "total return that makes today's weights optimal"
+     },
+     "bl_return": {
+      "type": "number",
+      "title": "Bl Return",
+      "description": "Black-Litterman posterior total return"
+     },
+     "risk_share": {
+      "type": "number",
+      "title": "Risk Share",
+      "description": "share of today's portfolio variance"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "weight_now",
+     "hist_return",
+     "volatility",
+     "implied_return",
+     "bl_return",
+     "risk_share"
+    ],
+    "title": "Asset"
+   },
+   "AssetClassWeight": {
+    "properties": {
+     "asset_class": {
+      "type": "string",
+      "title": "Asset Class"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "weight": {
+      "type": "number",
+      "title": "Weight"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "asset_class",
+     "market_value",
+     "weight"
+    ],
+    "title": "AssetClassWeight"
+   },
+   "Attribution": {
+    "properties": {
+     "benchmark": {
+      "type": "string",
+      "title": "Benchmark"
+     },
+     "start": {
+      "type": "string",
+      "format": "date",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "format": "date",
+      "title": "End"
+     },
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "portfolio": {
+      "$ref": "#/components/schemas/PeriodStats"
+     },
+     "benchmark_stats": {
+      "$ref": "#/components/schemas/PeriodStats"
+     },
+     "active_return": {
+      "type": "number",
+      "title": "Active Return"
+     },
+     "active_annualized": {
+      "type": "number",
+      "title": "Active Annualized"
+     },
+     "tracking_error": {
+      "type": "number",
+      "title": "Tracking Error"
+     },
+     "information_ratio": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Information Ratio"
+     },
+     "effects": {
+      "items": {
+       "$ref": "#/components/schemas/Effect"
+      },
+      "type": "array",
+      "title": "Effects"
+     },
+     "totals": {
+      "$ref": "#/components/schemas/EffectTotals"
+     },
+     "by_year": {
+      "items": {
+       "$ref": "#/components/schemas/YearAttribution"
+      },
+      "type": "array",
+      "title": "By Year"
+     },
+     "growth": {
+      "items": {
+       "$ref": "#/components/schemas/GrowthPoint"
+      },
+      "type": "array",
+      "title": "Growth"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "benchmark",
+     "start",
+     "end",
+     "days",
+     "portfolio",
+     "benchmark_stats",
+     "active_return",
+     "active_annualized",
+     "tracking_error",
+     "information_ratio",
+     "effects",
+     "totals",
+     "by_year",
+     "growth"
+    ],
+    "title": "Attribution"
+   },
+   "Backtest": {
+    "properties": {
+     "confidence": {
+      "type": "number",
+      "title": "Confidence"
+     },
+     "start": {
+      "type": "string",
+      "format": "date",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "format": "date",
+      "title": "End"
+     },
+     "days": {
+      "items": {
+       "$ref": "#/components/schemas/BacktestDay"
+      },
+      "type": "array",
+      "title": "Days"
+     },
+     "tests": {
+      "items": {
+       "$ref": "#/components/schemas/BacktestTest"
+      },
+      "type": "array",
+      "title": "Tests"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "confidence",
+     "start",
+     "end",
+     "days",
+     "tests"
+    ],
+    "title": "Backtest"
+   },
+   "BacktestDay": {
+    "properties": {
+     "date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date"
+     },
+     "pnl": {
+      "type": "number",
+      "title": "Pnl"
+     },
+     "var_historical": {
+      "type": "number",
+      "title": "Var Historical"
+     },
+     "var_parametric": {
+      "type": "number",
+      "title": "Var Parametric"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "date",
+     "pnl",
+     "var_historical",
+     "var_parametric"
+    ],
+    "title": "BacktestDay"
+   },
+   "BacktestTest": {
+    "properties": {
+     "method": {
+      "type": "string",
+      "title": "Method"
+     },
+     "exceptions": {
+      "type": "integer",
+      "title": "Exceptions"
+     },
+     "observations": {
+      "type": "integer",
+      "title": "Observations"
+     },
+     "expected": {
+      "type": "number",
+      "title": "Expected"
+     },
+     "rate": {
+      "type": "number",
+      "title": "Rate"
+     },
+     "kupiec_p": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kupiec P"
+     },
+     "independence_p": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Independence P"
+     },
+     "conditional_coverage_p": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Conditional Coverage P"
+     },
+     "last250": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last250"
+     },
+     "basel_zone": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Basel Zone"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "method",
+     "exceptions",
+     "observations",
+     "expected",
+     "rate",
+     "kupiec_p",
+     "independence_p",
+     "conditional_coverage_p",
+     "last250",
+     "basel_zone"
+    ],
+    "title": "BacktestTest"
+   },
+   "BondRisk": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "face": {
+      "type": "number",
+      "title": "Face"
+     },
+     "clean": {
+      "type": "number",
+      "title": "Clean"
+     },
+     "accrued": {
+      "type": "number",
+      "title": "Accrued"
+     },
+     "dirty": {
+      "type": "number",
+      "title": "Dirty"
+     },
+     "ytm_pct": {
+      "type": "number",
+      "title": "Ytm Pct"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "mod_duration": {
+      "type": "number",
+      "title": "Mod Duration"
+     },
+     "eff_duration": {
+      "type": "number",
+      "title": "Eff Duration"
+     },
+     "convexity": {
+      "type": "number",
+      "title": "Convexity"
+     },
+     "dv01_usd": {
+      "type": "number",
+      "title": "Dv01 Usd",
+      "description": "$ gained per 1bp parallel fall in par yields"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "face",
+     "clean",
+     "accrued",
+     "dirty",
+     "ytm_pct",
+     "market_value",
+     "mod_duration",
+     "eff_duration",
+     "convexity",
+     "dv01_usd"
+    ],
+    "title": "BondRisk"
+   },
+   "CurvePoint": {
+    "properties": {
+     "tenor": {
+      "type": "string",
+      "title": "Tenor"
+     },
+     "par_pct": {
+      "type": "number",
+      "title": "Par Pct"
+     },
+     "zero_bey_pct": {
+      "type": "number",
+      "title": "Zero Bey Pct",
+      "description": "zero rate, semiannual bond-equivalent"
+     },
+     "zero_cc_pct": {
+      "type": "number",
+      "title": "Zero Cc Pct",
+      "description": "zero rate, continuously compounded"
+     },
+     "discount_factor": {
+      "type": "number",
+      "title": "Discount Factor"
+     },
+     "fwd_6m_bey_pct": {
+      "type": "number",
+      "title": "Fwd 6M Bey Pct",
+      "description": "6-month forward rate starting at the tenor"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "tenor",
+     "par_pct",
+     "zero_bey_pct",
+     "zero_cc_pct",
+     "discount_factor",
+     "fwd_6m_bey_pct"
+    ],
+    "title": "CurvePoint"
+   },
+   "DurationCheck": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "series": {
+      "type": "string",
+      "title": "Series"
+     },
+     "start": {
+      "type": "string",
+      "format": "date",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "format": "date",
+      "title": "End"
+     },
+     "observations": {
+      "type": "integer",
+      "title": "Observations"
+     },
+     "duration": {
+      "type": "number",
+      "title": "Duration"
+     },
+     "r_squared": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R Squared"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "series",
+     "start",
+     "end",
+     "observations",
+     "duration",
+     "r_squared"
+    ],
+    "title": "DurationCheck"
+   },
+   "Effect": {
+    "properties": {
+     "segment": {
+      "type": "string",
+      "title": "Segment"
+     },
+     "allocation": {
+      "type": "number",
+      "title": "Allocation"
+     },
+     "selection": {
+      "type": "number",
+      "title": "Selection"
+     },
+     "interaction": {
+      "type": "number",
+      "title": "Interaction"
+     },
+     "total": {
+      "type": "number",
+      "title": "Total"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "segment",
+     "allocation",
+     "selection",
+     "interaction",
+     "total"
+    ],
+    "title": "Effect"
+   },
+   "EffectTotals": {
+    "properties": {
+     "allocation": {
+      "type": "number",
+      "title": "Allocation"
+     },
+     "selection": {
+      "type": "number",
+      "title": "Selection"
+     },
+     "interaction": {
+      "type": "number",
+      "title": "Interaction"
+     },
+     "total": {
+      "type": "number",
+      "title": "Total"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "allocation",
+     "selection",
+     "interaction",
+     "total"
+    ],
+    "title": "EffectTotals"
+   },
+   "Error": {
+    "properties": {
+     "detail": {
+      "type": "string",
+      "title": "Detail"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "detail"
+    ],
+    "title": "Error"
+   },
+   "Exposure": {
+    "properties": {
+     "underlying": {
+      "type": "string",
+      "title": "Underlying"
+     },
+     "spot": {
+      "type": "number",
+      "title": "Spot"
+     },
+     "stock_shares": {
+      "type": "number",
+      "title": "Stock Shares"
+     },
+     "option_delta_shares": {
+      "type": "number",
+      "title": "Option Delta Shares"
+     },
+     "net_delta_shares": {
+      "type": "number",
+      "title": "Net Delta Shares"
+     },
+     "stock_exposure_usd": {
+      "type": "number",
+      "title": "Stock Exposure Usd"
+     },
+     "net_exposure_usd": {
+      "type": "number",
+      "title": "Net Exposure Usd"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "underlying",
+     "spot",
+     "stock_shares",
+     "option_delta_shares",
+     "net_delta_shares",
+     "stock_exposure_usd",
+     "net_exposure_usd"
+    ],
+    "title": "Exposure"
+   },
+   "FrontierPoint": {
+    "properties": {
+     "expected_return": {
+      "type": "number",
+      "title": "Expected Return"
+     },
+     "volatility": {
+      "type": "number",
+      "title": "Volatility"
+     },
+     "sharpe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sharpe"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "expected_return",
+     "volatility",
+     "sharpe"
+    ],
+    "title": "FrontierPoint"
+   },
+   "Greeks": {
+    "properties": {
+     "as_of": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "As Of"
+     },
+     "options": {
+      "items": {
+       "$ref": "#/components/schemas/OptionRisk"
+      },
+      "type": "array",
+      "title": "Options"
+     },
+     "exposure": {
+      "items": {
+       "$ref": "#/components/schemas/Exposure"
+      },
+      "type": "array",
+      "title": "Exposure"
+     },
+     "total_vega": {
+      "type": "number",
+      "title": "Total Vega"
+     },
+     "total_theta": {
+      "type": "number",
+      "title": "Total Theta"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "as_of",
+     "options",
+     "exposure",
+     "total_vega",
+     "total_theta"
+    ],
+    "title": "Greeks"
+   },
+   "GrowthPoint": {
+    "properties": {
+     "date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date"
+     },
+     "portfolio": {
+      "type": "number",
+      "title": "Portfolio",
+      "description": "growth of $1"
+     },
+     "benchmark": {
+      "type": "number",
+      "title": "Benchmark"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "date",
+     "portfolio",
+     "benchmark"
+    ],
+    "title": "GrowthPoint"
+   },
+   "Health": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "title": "Status",
+      "description": "ok, or degraded when the database cannot be reached"
+     },
+     "database": {
+      "type": "string",
+      "title": "Database"
+     },
+     "schema_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Schema Version",
+      "description": "latest applied migration"
+     },
+     "version": {
+      "type": "string",
+      "title": "Version"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "status",
+     "database",
+     "schema_version",
+     "version"
+    ],
+    "title": "Health"
+   },
+   "HistoryPoint": {
+    "properties": {
+     "date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "daily_pnl": {
+      "type": "number",
+      "title": "Daily Pnl"
+     },
+     "cumulative_pnl": {
+      "type": "number",
+      "title": "Cumulative Pnl"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "date",
+     "market_value",
+     "daily_pnl",
+     "cumulative_pnl"
+    ],
+    "title": "HistoryPoint"
+   },
+   "Holding": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "asset_class": {
+      "type": "string",
+      "title": "Asset Class"
+     },
+     "segment": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Segment",
+      "description": "attribution segment, when set explicitly"
+     },
+     "quantity": {
+      "type": "number",
+      "title": "Quantity",
+      "description": "shares; $100-face units for bonds; shares covered for options; notional/100 for swaps (negative = pay fixed)"
+     },
+     "price": {
+      "type": "number",
+      "title": "Price"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "weight": {
+      "type": "number",
+      "title": "Weight"
+     },
+     "day_pnl": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Day Pnl"
+     },
+     "total_pnl": {
+      "type": "number",
+      "title": "Total Pnl",
+      "description": "lifetime P&L including income, net of fees"
+     },
+     "total_income": {
+      "type": "number",
+      "title": "Total Income",
+      "description": "dividends, coupons and swap payments received"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "name",
+     "asset_class",
+     "segment",
+     "quantity",
+     "price",
+     "market_value",
+     "weight",
+     "day_pnl",
+     "total_pnl",
+     "total_income"
+    ],
+    "title": "Holding"
+   },
+   "KeyRatePosition": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "dv01": {
+      "items": {
+       "type": "number"
+      },
+      "type": "array",
+      "title": "Dv01"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "dv01"
+    ],
+    "title": "KeyRatePosition"
+   },
+   "KeyRates": {
+    "properties": {
+     "tenors": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Tenors"
+     },
+     "positions": {
+      "items": {
+       "$ref": "#/components/schemas/KeyRatePosition"
+      },
+      "type": "array",
+      "title": "Positions"
+     },
+     "total": {
+      "items": {
+       "type": "number"
+      },
+      "type": "array",
+      "title": "Total"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "tenors",
+     "positions",
+     "total"
+    ],
+    "title": "KeyRates"
+   },
+   "Optimization": {
+    "properties": {
+     "as_of": {
+      "type": "string",
+      "format": "date",
+      "title": "As Of"
+     },
+     "risk_free": {
+      "type": "number",
+      "title": "Risk Free"
+     },
+     "lookback_days": {
+      "type": "integer",
+      "title": "Lookback Days"
+     },
+     "returns_from": {
+      "type": "string",
+      "format": "date",
+      "title": "Returns From"
+     },
+     "max_weight": {
+      "type": "number",
+      "title": "Max Weight"
+     },
+     "delta": {
+      "type": "number",
+      "title": "Delta"
+     },
+     "tau": {
+      "type": "number",
+      "title": "Tau"
+     },
+     "views": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Views"
+     },
+     "symbols": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Symbols"
+     },
+     "assets": {
+      "items": {
+       "$ref": "#/components/schemas/Asset"
+      },
+      "type": "array",
+      "title": "Assets"
+     },
+     "covariance": {
+      "items": {
+       "items": {
+        "type": "number"
+       },
+       "type": "array"
+      },
+      "type": "array",
+      "title": "Covariance",
+      "description": "annualized, in the order of symbols"
+     },
+     "portfolios": {
+      "items": {
+       "$ref": "#/components/schemas/OptimizedPortfolio"
+      },
+      "type": "array",
+      "title": "Portfolios"
+     },
+     "frontier": {
+      "items": {
+       "$ref": "#/components/schemas/FrontierPoint"
+      },
+      "type": "array",
+      "title": "Frontier"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "as_of",
+     "risk_free",
+     "lookback_days",
+     "returns_from",
+     "max_weight",
+     "delta",
+     "tau",
+     "views",
+     "symbols",
+     "assets",
+     "covariance",
+     "portfolios",
+     "frontier"
+    ],
+    "title": "Optimization"
+   },
+   "OptimizedPortfolio": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "expected_return": {
+      "type": "number",
+      "title": "Expected Return"
+     },
+     "volatility": {
+      "type": "number",
+      "title": "Volatility"
+     },
+     "sharpe": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sharpe"
+     },
+     "weights": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "type": "object",
+      "title": "Weights"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "name",
+     "expected_return",
+     "volatility",
+     "sharpe",
+     "weights"
+    ],
+    "title": "OptimizedPortfolio"
+   },
+   "OptionRisk": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "underlying": {
+      "type": "string",
+      "title": "Underlying"
+     },
+     "quantity": {
+      "type": "number",
+      "title": "Quantity"
+     },
+     "spot": {
+      "type": "number",
+      "title": "Spot"
+     },
+     "vol_pct": {
+      "type": "number",
+      "title": "Vol Pct"
+     },
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "price": {
+      "type": "number",
+      "title": "Price"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "delta": {
+      "type": "number",
+      "title": "Delta"
+     },
+     "delta_shares": {
+      "type": "number",
+      "title": "Delta Shares"
+     },
+     "gamma_shares": {
+      "type": "number",
+      "title": "Gamma Shares"
+     },
+     "vega_usd": {
+      "type": "number",
+      "title": "Vega Usd",
+      "description": "$ per 1 volatility point"
+     },
+     "theta_usd_day": {
+      "type": "number",
+      "title": "Theta Usd Day"
+     },
+     "rho_usd": {
+      "type": "number",
+      "title": "Rho Usd",
+      "description": "$ per 1% change in rates"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "underlying",
+     "quantity",
+     "spot",
+     "vol_pct",
+     "days",
+     "price",
+     "market_value",
+     "delta",
+     "delta_shares",
+     "gamma_shares",
+     "vega_usd",
+     "theta_usd_day",
+     "rho_usd"
+    ],
+    "title": "OptionRisk"
+   },
+   "PeriodStats": {
+    "properties": {
+     "total_return": {
+      "type": "number",
+      "title": "Total Return"
+     },
+     "annualized": {
+      "type": "number",
+      "title": "Annualized"
+     },
+     "volatility": {
+      "type": "number",
+      "title": "Volatility"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "total_return",
+     "annualized",
+     "volatility"
+    ],
+    "title": "PeriodStats"
+   },
+   "PortfolioInfo": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "as_of": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "As Of"
+     },
+     "market_value": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Market Value"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "name",
+     "as_of",
+     "market_value"
+    ],
+    "title": "PortfolioInfo"
+   },
+   "RateScenario": {
+    "properties": {
+     "scenario": {
+      "type": "string",
+      "title": "Scenario"
+     },
+     "description": {
+      "type": "string",
+      "title": "Description"
+     },
+     "full_reval_pnl": {
+      "type": "number",
+      "title": "Full Reval Pnl"
+     },
+     "key_rate_estimate": {
+      "type": "number",
+      "title": "Key Rate Estimate"
+     },
+     "convexity_effect": {
+      "type": "number",
+      "title": "Convexity Effect"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "scenario",
+     "description",
+     "full_reval_pnl",
+     "key_rate_estimate",
+     "convexity_effect"
+    ],
+    "title": "RateScenario"
+   },
+   "RatesRisk": {
+    "properties": {
+     "as_of": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "As Of"
+     },
+     "curve_date": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Curve Date"
+     },
+     "bonds": {
+      "items": {
+       "$ref": "#/components/schemas/BondRisk"
+      },
+      "type": "array",
+      "title": "Bonds"
+     },
+     "swaps": {
+      "items": {
+       "$ref": "#/components/schemas/SwapRisk"
+      },
+      "type": "array",
+      "title": "Swaps"
+     },
+     "key_rates": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/KeyRates"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "scenarios": {
+      "items": {
+       "$ref": "#/components/schemas/RateScenario"
+      },
+      "type": "array",
+      "title": "Scenarios"
+     },
+     "bond_dv01": {
+      "type": "number",
+      "title": "Bond Dv01"
+     },
+     "swap_dv01": {
+      "type": "number",
+      "title": "Swap Dv01"
+     },
+     "total_dv01": {
+      "type": "number",
+      "title": "Total Dv01"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "as_of",
+     "curve_date",
+     "bonds",
+     "swaps",
+     "key_rates",
+     "scenarios",
+     "bond_dv01",
+     "swap_dv01",
+     "total_dv01"
+    ],
+    "title": "RatesRisk"
+   },
+   "SofrCheck": {
+    "properties": {
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "start": {
+      "type": "string",
+      "format": "date",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "format": "date",
+      "title": "End"
+     },
+     "exact_matches": {
+      "type": "integer",
+      "title": "Exact Matches"
+     },
+     "largest_diff_bp": {
+      "type": "number",
+      "title": "Largest Diff Bp"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "days",
+     "start",
+     "end",
+     "exact_matches",
+     "largest_diff_bp"
+    ],
+    "title": "SofrCheck"
+   },
+   "StandaloneRisk": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "var": {
+      "type": "number",
+      "title": "Var"
+     },
+     "es": {
+      "type": "number",
+      "title": "Es"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "name",
+     "var",
+     "es"
+    ],
+    "title": "StandaloneRisk"
+   },
+   "Stress": {
+    "properties": {
+     "as_of": {
+      "type": "string",
+      "format": "date",
+      "title": "As Of"
+     },
+     "episodes": {
+      "items": {
+       "$ref": "#/components/schemas/StressEpisode"
+      },
+      "type": "array",
+      "title": "Episodes"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "as_of",
+     "episodes"
+    ],
+    "title": "Stress"
+   },
+   "StressEpisode": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "description": {
+      "type": "string",
+      "title": "Description"
+     },
+     "start": {
+      "type": "string",
+      "format": "date",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "format": "date",
+      "title": "End"
+     },
+     "spy_return": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Spy Return"
+     },
+     "ust10y_change_bp": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ust10Y Change Bp"
+     },
+     "pnl": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "type": "object",
+      "title": "Pnl",
+      "description": "$ P&L by asset class, plus total"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "name",
+     "description",
+     "start",
+     "end",
+     "spy_return",
+     "ust10y_change_bp",
+     "pnl"
+    ],
+    "title": "StressEpisode"
+   },
+   "Summary": {
+    "properties": {
+     "portfolio": {
+      "type": "string",
+      "title": "Portfolio"
+     },
+     "as_of": {
+      "type": "string",
+      "format": "date",
+      "title": "As Of"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "day_pnl": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Day Pnl"
+     },
+     "lifetime_pnl": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lifetime Pnl"
+     },
+     "lifetime_income": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lifetime Income"
+     },
+     "inception": {
+      "type": "string",
+      "format": "date",
+      "title": "Inception"
+     },
+     "holdings": {
+      "items": {
+       "$ref": "#/components/schemas/Holding"
+      },
+      "type": "array",
+      "title": "Holdings"
+     },
+     "by_asset_class": {
+      "items": {
+       "$ref": "#/components/schemas/AssetClassWeight"
+      },
+      "type": "array",
+      "title": "By Asset Class"
+     },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/HistoryPoint"
+      },
+      "type": "array",
+      "title": "History"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "portfolio",
+     "as_of",
+     "market_value",
+     "day_pnl",
+     "lifetime_pnl",
+     "lifetime_income",
+     "inception",
+     "holdings",
+     "by_asset_class",
+     "history"
+    ],
+    "title": "Summary"
+   },
+   "SwapRisk": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "notional": {
+      "type": "number",
+      "title": "Notional"
+     },
+     "direction": {
+      "type": "string",
+      "title": "Direction"
+     },
+     "fixed_pct": {
+      "type": "number",
+      "title": "Fixed Pct"
+     },
+     "par_today_pct": {
+      "type": "number",
+      "title": "Par Today Pct"
+     },
+     "pv_per_100": {
+      "type": "number",
+      "title": "Pv Per 100"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "dv01_usd": {
+      "type": "number",
+      "title": "Dv01 Usd"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "symbol",
+     "notional",
+     "direction",
+     "fixed_pct",
+     "par_today_pct",
+     "pv_per_100",
+     "market_value",
+     "dv01_usd"
+    ],
+    "title": "SwapRisk"
+   },
+   "TailMeasure": {
+    "properties": {
+     "method": {
+      "type": "string",
+      "title": "Method"
+     },
+     "var": {
+      "type": "number",
+      "title": "Var",
+      "description": "1-day Value-at-Risk, a positive loss in $"
+     },
+     "es": {
+      "type": "number",
+      "title": "Es",
+      "description": "1-day Expected Shortfall, a positive loss in $"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "method",
+     "var",
+     "es"
+    ],
+    "title": "TailMeasure"
+   },
+   "TreasuryCurve": {
+    "properties": {
+     "date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date"
+     },
+     "points": {
+      "items": {
+       "$ref": "#/components/schemas/CurvePoint"
+      },
+      "type": "array",
+      "title": "Points"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "date",
+     "points"
+    ],
+    "title": "TreasuryCurve"
+   },
+   "Validation": {
+    "properties": {
+     "sofr_30day_average": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SofrCheck"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "tlt_empirical_duration": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/DurationCheck"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "sofr_30day_average",
+     "tlt_empirical_duration"
+    ],
+    "title": "Validation"
+   },
+   "ValueAtRisk": {
+    "properties": {
+     "as_of": {
+      "type": "string",
+      "format": "date",
+      "title": "As Of"
+     },
+     "confidence": {
+      "type": "number",
+      "title": "Confidence"
+     },
+     "market_value": {
+      "type": "number",
+      "title": "Market Value"
+     },
+     "lookback_days": {
+      "type": "integer",
+      "title": "Lookback Days"
+     },
+     "simulations": {
+      "type": "integer",
+      "title": "Simulations"
+     },
+     "methods": {
+      "items": {
+       "$ref": "#/components/schemas/TailMeasure"
+      },
+      "type": "array",
+      "title": "Methods"
+     },
+     "standalone": {
+      "items": {
+       "$ref": "#/components/schemas/StandaloneRisk"
+      },
+      "type": "array",
+      "title": "Standalone"
+     },
+     "sum_of_standalone": {
+      "type": "number",
+      "title": "Sum Of Standalone"
+     },
+     "diversification_benefit": {
+      "type": "number",
+      "title": "Diversification Benefit"
+     },
+     "unpriced": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Unpriced"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "as_of",
+     "confidence",
+     "market_value",
+     "lookback_days",
+     "simulations",
+     "methods",
+     "standalone",
+     "sum_of_standalone",
+     "diversification_benefit",
+     "unpriced"
+    ],
+    "title": "ValueAtRisk"
+   },
+   "YearAttribution": {
+    "properties": {
+     "year": {
+      "type": "integer",
+      "title": "Year"
+     },
+     "portfolio_return": {
+      "type": "number",
+      "title": "Portfolio Return"
+     },
+     "benchmark_return": {
+      "type": "number",
+      "title": "Benchmark Return"
+     },
+     "allocation": {
+      "type": "number",
+      "title": "Allocation"
+     },
+     "selection": {
+      "type": "number",
+      "title": "Selection"
+     },
+     "interaction": {
+      "type": "number",
+      "title": "Interaction"
+     }
+    },
+    "additionalProperties": false,
+    "type": "object",
+    "required": [
+     "year",
+     "portfolio_return",
+     "benchmark_return",
+     "allocation",
+     "selection",
+     "interaction"
+    ],
+    "title": "YearAttribution"
+   }
+  }
+ },
+ "tags": [
+  {
+   "name": "portfolio",
+   "description": "Holdings, P&L and history"
+  },
+  {
+   "name": "fixed income",
+   "description": "Treasury curve, duration, DV01, key rates, scenarios"
+  },
+  {
+   "name": "derivatives",
+   "description": "Option Greeks and delta-adjusted exposure"
+  },
+  {
+   "name": "risk",
+   "description": "Value-at-Risk, backtesting and historical stress tests"
+  },
+  {
+   "name": "construction",
+   "description": "Optimization, Black-Litterman and performance attribution"
+  },
+  {
+   "name": "validation",
+   "description": "Ballast's numbers against independently published figures"
+  },
+  {
+   "name": "service",
+   "description": "Health check"
+  }
+ ]
+}

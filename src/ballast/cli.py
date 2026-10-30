@@ -17,14 +17,13 @@ from ballast.market_data.load import DEFAULT_HISTORY_START, load_prices, load_ra
 from ballast.derivatives import chains
 from ballast.derivatives.analytics import greeks_report
 from ballast.derivatives.black_scholes import PricingError
-from ballast.derivatives.sofr import FixingError, sofr_average
-from ballast.derivatives.store import load_sofr_fixings, price_options, price_swaps
+from ballast.derivatives.store import price_options, price_swaps
 from ballast.fixed_income.analytics import curve_snapshot, rates_risk_report
-from ballast.fixed_income.sensitivity import empirical_duration
-from ballast.fixed_income.store import build_curves, etf_rate_sensitivity_data, price_bonds
+from ballast.fixed_income.store import build_curves, price_bonds
 from ballast.fixed_income.store import par_curve_on
 from ballast.risk.commands import cmd_backtest, cmd_stress, cmd_var
 from ballast.construction.commands import cmd_attribution, cmd_optimize
+from ballast.validation import etf_duration_check, sofr_average_check
 from ballast.portfolio.seed import (
     seed_bond_terms,
     seed_instruments,
@@ -325,34 +324,15 @@ def _save_quotes(engine: Engine, chain, table: pd.DataFrame, F: float, r: float)
 
 
 def cmd_sofr_check(engine: Engine, args) -> int:
-    fixings = load_sofr_fixings(engine)
-    with engine.connect() as conn:
-        published = conn.execute(
-            text("SELECT obs_date, value_pct FROM rate_observations WHERE series_id = 'SOFR30DAYAVG' ORDER BY obs_date")
-        ).all()
-    if not fixings or not published:
-        print("Need SOFR and SOFR30DAYAVG from FRED. Run `ballast load-rates`.")
+    check = sofr_average_check(engine)
+    if check is None:
+        print("Need SOFR and SOFR30DAYAVG from FRED, overlapping by at least a month. Run `ballast load-rates`.")
         return 1
-    first = min(fixings)
-    rows = []
-    for pub, value in published:
-        if (pub - first).days < 31:
-            continue
-        try:
-            ours = sofr_average(fixings, pub) * 100
-        except FixingError:
-            continue
-        rows.append((pub, float(value), ours))
-    if not rows:
-        print("No overlapping dates to compare.")
-        return 1
-    df = pd.DataFrame(rows, columns=["published_on", "nyfed_pct", "ballast_pct"])
-    df["diff_bp"] = (df.ballast_pct - df.nyfed_pct) * 100
-    exact = int((df.ballast_pct.round(5) == df.nyfed_pct.round(5)).sum())
+    df, exact = check.comparison, check.exact_matches
     print("\n30-day average SOFR: Ballast compounding vs NY Fed published values")
     print(f"{len(df)} publication days, {df.published_on.iloc[0]} to {df.published_on.iloc[-1]}")
     print(f"Exact match at the published 5 decimals: {exact} of {len(df)} ({exact / len(df):.1%})")
-    print(f"Largest difference: {df.diff_bp.abs().max():.4f} bp\n")
+    print(f"Largest difference: {check.largest_diff_bp:.4f} bp\n")
     print(_fmt(df.tail(5), {"nyfed_pct": "{:.5f}", "ballast_pct": "{:.5f}", "diff_bp": "{:+.4f}"}))
     worst = df.loc[df.diff_bp.abs() > 0.001]
     if not worst.empty:
@@ -363,21 +343,61 @@ def cmd_sofr_check(engine: Engine, args) -> int:
 
 
 def cmd_rate_sensitivity(engine: Engine, args) -> int:
-    df = etf_rate_sensitivity_data(engine, args.symbol, args.series, args.since)
-    if len(df) < 21:
+    check = etf_duration_check(engine, args.symbol, args.series, args.since)
+    if check is None:
         print(f"Not enough overlapping data for {args.symbol} and {args.series}.")
         return 1
-    returns = df.adj_close.pct_change().to_numpy()[1:]
-    dy = (df.value_pct.diff() / 100).to_numpy()[1:]
-    est = empirical_duration(returns, dy)
-    first, last = df.iloc[0], df.iloc[-1]
-    dy_total = (last.value_pct - first.value_pct) / 100
+    est, first, last, dy_total = check.estimate, check.first, check.last, check.yield_change
     print(f"\n{args.symbol.upper()} vs {args.series}, {first.day} to {last.day} ({est.observations} daily observations)\n")
     print(f"Empirical duration       {est.duration:6.2f}   (R-squared {est.r_squared:.2f})")
     print(f"{args.series} change          {dy_total * 1e4:+7.0f} bp   ({first.value_pct:.2f}% -> {last.value_pct:.2f}%)")
     print(f"Implied price effect     {-est.duration * dy_total:+7.2%}   (-duration x yield change)")
-    print(f"Actual price return      {last.close / first.close - 1:+7.2%}")
-    print(f"Actual total return      {last.adj_close / first.adj_close - 1:+7.2%}   (price + distributions)")
+    print(f"Actual price return      {check.price_return:+7.2%}")
+    print(f"Actual total return      {check.total_return:+7.2%}   (price + distributions)")
+    return 0
+
+
+def cmd_export_site(engine: Engine, args) -> int:
+    from ballast.export import ExportRefused, export_site
+    from ballast.service import ServiceError
+
+    print(f"Building the dashboard data for {args.portfolio} (VaR, backtest and stress take a minute)...")
+    try:
+        res = export_site(engine, args.portfolio, args.out, args.benchmark, args.allow_private)
+    except (ExportRefused, ServiceError) as exc:
+        print(f"Not exported: {exc}")
+        return 1
+    print(f"Wrote {res.snapshot_path} ({res.snapshot_bytes / 1024:,.0f} KB, data as of {res.as_of})")
+    print(f"Wrote {res.openapi_path}")
+    print("Preview: `ballast serve`, then open http://127.0.0.1:8000")
+    return 0
+
+
+def _is_loopback(host: str) -> bool:
+    import ipaddress
+
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+def cmd_serve(engine: Engine, args) -> int:
+    import uvicorn
+
+    from ballast.api.app import create_app
+    from ballast.export import SITE_DIR
+
+    local = _is_loopback(args.host)
+    if not local and not args.allow_remote:
+        print(f"Refusing to listen on {args.host}: other computers on your network could read your portfolio. "
+              "Use 127.0.0.1 (the default), or add --allow-remote if you really mean it.")
+        return 1
+    print(f"Ballast on http://{args.host}:{args.port}  (dashboard /, API docs /api/docs; Ctrl+C to stop)")
+    app = create_app(engine, SITE_DIR, allowed_hosts=None if local else ["*"])
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 
 
@@ -498,6 +518,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = add("report", cmd_report, "print holdings and lifetime P&L")
     p.add_argument("--portfolio", default="Ballast Core")
+
+    p = add("export-site", cmd_export_site, "write the dashboard's data files (site/data/) for publishing")
+    p.add_argument("--portfolio", default="Ballast Core")
+    p.add_argument("--benchmark", default="SPY:0.6,TLT:0.4")
+    p.add_argument("--out", type=Path, default=None, help="output folder (default: site/data)")
+    p.add_argument("--allow-private", action="store_true",
+                   help="export even if the portfolio's trades differ from the public seed ledger")
+
+    p = add("serve", cmd_serve, "run the REST API and the dashboard locally")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--allow-remote", action="store_true", help="allow listening on a non-loopback address")
 
     p = add("bootstrap", cmd_bootstrap, "run every step from empty database to report")
     p.add_argument("--start", type=date.fromisoformat, default=DEFAULT_HISTORY_START)

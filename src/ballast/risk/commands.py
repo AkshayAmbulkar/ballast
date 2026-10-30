@@ -7,8 +7,7 @@ from decimal import Decimal
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from ballast.risk.backtest import basel_zone, christoffersen_independence, conditional_coverage, kupiec_pof
-from ballast.risk.engine import compute_var, run_backtest
+from ballast.risk.engine import compute_var, run_backtest, summarize_backtest
 from ballast.risk.market import RiskDataError, load_market_data
 from ballast.risk.snapshot import build_snapshot
 from ballast.risk.stress import run_stress
@@ -91,21 +90,16 @@ def cmd_backtest(engine: Engine, args) -> int:
     if len(days) < 20:
         print(f"Only {len(days)} days could be backtested; need more history.")
         return 1
-    p = 1 - args.confidence
     print(f"\nVaR backtest: {args.portfolio}, {args.confidence:.0%} 1-day VaR set at each previous close")
     print(f"{len(days)} days, {days[0].date} to {days[-1].date}; an exception is a loss larger than VaR\n")
-    rows = []
-    for method in ("historical", "parametric"):
-        hits = [d.actual_pnl < -d.var[method] for d in days]
-        x, n = sum(hits), len(hits)
-        last = hits[-250:]
-        rows.append({
-            "method": method, "exceptions": x, "expected": n * p, "rate_pct": x / n * 100,
-            "kupiec_p": kupiec_pof(x, n, p).p_value,
-            "indep_p": christoffersen_independence(hits).p_value,
-            "cc_p": conditional_coverage(x, n, p, hits).p_value,
-            "last250": f"{sum(last)} ({basel_zone(sum(last))})" if len(last) == 250 else "n/a",
-        })
+    rows = [
+        {
+            "method": s.method, "exceptions": s.exceptions, "expected": s.expected, "rate_pct": s.rate * 100,
+            "kupiec_p": s.kupiec.p_value, "indep_p": s.independence.p_value, "cc_p": s.conditional.p_value,
+            "last250": "n/a" if s.last250 is None else f"{s.last250} ({s.zone})",
+        }
+        for s in summarize_backtest(days, args.confidence)
+    ]
     print(_fmt(pd.DataFrame(rows), {"expected": "{:.1f}", "rate_pct": "{:.2f}", "kupiec_p": "{:.3f}",
                                     "indep_p": "{:.3f}", "cc_p": "{:.3f}"}))
     print("\np-values below 0.05 reject the model: kupiec = wrong number of exceptions, indep = exceptions")

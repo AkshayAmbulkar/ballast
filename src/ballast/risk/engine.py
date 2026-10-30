@@ -13,6 +13,13 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from ballast.risk.backtest import (
+    TestResult,
+    basel_zone,
+    christoffersen_independence,
+    conditional_coverage,
+    kupiec_pof,
+)
 from ballast.risk.market import MarketData, RiskDataError
 from ballast.risk.snapshot import Snapshot, build_snapshot
 from ballast.risk.var import TailRisk, ewma_covariance, monte_carlo_factors, parametric, tail_risk
@@ -96,4 +103,37 @@ def run_backtest(md: MarketData, confidence: float = 0.99, lookback: int = DEFAU
         hs = tail_risk(snap.pnl(eq, rates), confidence).var
         par, _ = parametric(snap.sensitivities(), ewma_covariance(hist.to_numpy(dtype=float)), confidence)
         out.append(BacktestDay(day, float(md.daily_pnl.loc[day]), {"historical": hs, "parametric": par.var}))
+    return out
+
+
+@dataclass(frozen=True)
+class BacktestSummary:
+    method: str
+    exceptions: int
+    observations: int
+    expected: float
+    kupiec: TestResult                  # right number of exceptions?
+    independence: TestResult            # exceptions not clustered? (Christoffersen)
+    conditional: TestResult             # both combined
+    last250: int | None                 # exceptions in the latest 250 days, for the Basel traffic light
+    zone: str | None
+
+    @property
+    def rate(self) -> float:
+        return self.exceptions / self.observations
+
+
+def summarize_backtest(days: list[BacktestDay], confidence: float,
+                       methods=("historical", "parametric")) -> list[BacktestSummary]:
+    p = 1 - confidence
+    out = []
+    for method in methods:
+        hits = [d.actual_pnl < -d.var[method] for d in days]
+        x, n = sum(hits), len(hits)
+        last = hits[-250:] if len(hits) >= 250 else None
+        out.append(BacktestSummary(
+            method, x, n, n * p, kupiec_pof(x, n, p), christoffersen_independence(hits),
+            conditional_coverage(x, n, p, hits),
+            None if last is None else sum(last), None if last is None else basel_zone(sum(last)),
+        ))
     return out
