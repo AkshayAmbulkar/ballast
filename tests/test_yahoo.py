@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pandas as pd
 import pytest
 
-from ballast.market_data.yahoo import YahooError, later_split_factor, to_as_traded
+from ballast.market_data.yahoo import YahooError, drop_unfinished_session, later_split_factor, to_as_traded
 
 
 def _raw(closes, splits=None, dividends=None, tz="America/New_York"):
@@ -70,3 +70,15 @@ def test_timezone_aware_index_keeps_exchange_date():
 def test_missing_columns_raise():
     with pytest.raises(YahooError):
         to_as_traded(pd.DataFrame({"Close": [1.0]}, index=pd.date_range("2024-01-02", periods=1)))
+
+
+def test_todays_bar_is_dropped_until_the_new_york_close():
+    """2024-06-05 to 2024-06-07; on the 7th the market closes at 4:00 pm New York (20:00 UTC in June)."""
+    hist = to_as_traded(_raw([100.0, 101.0, 102.0], splits=[0.0, 0.0, 2.0]))
+    during = drop_unfinished_session(hist, datetime(2024, 6, 7, 19, 0, tzinfo=timezone.utc))     # 3:00 pm New York
+    after = drop_unfinished_session(hist, datetime(2024, 6, 7, 20, 45, tzinfo=timezone.utc))     # 4:45 pm New York
+    assert list(during.prices.price_date) == [date(2024, 6, 5), date(2024, 6, 6)]
+    assert len(after.prices) == 3
+    # the split dated today is kept, and the earlier prices stay converted for it
+    assert list(during.splits.ex_date) == [date(2024, 6, 7)]
+    assert during.prices.close.tolist() == [Decimal("200.0"), Decimal("202.0")]
