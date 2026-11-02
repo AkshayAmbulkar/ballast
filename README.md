@@ -14,6 +14,8 @@ Ballast holds a portfolio of equities, ETFs, Treasuries, options and a SOFR swap
 
 **[Open the live dashboard](https://akshayambulkar.github.io/ballast/)**: holdings and P&L, the Treasury curve and rate risk, option Greeks, VaR with its backtest, stress tests, an efficient frontier where you can try your own Black-Litterman views, performance attribution, and the checks against published figures. Product thinking is in the [PRD](docs/product/PRD.md).
 
+[![The Ballast dashboard: the portfolio's value and 1-in-100 daily loss, above every day's P&L against the 99% VaR set the evening before](docs/images/dashboard.png)](https://akshayambulkar.github.io/ballast/)
+
 ```mermaid
 flowchart LR
     S[Yahoo Finance · FRED · trade ledger] --> L[Loaders]

@@ -35,3 +35,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = [
+    # Starlette 1.10+ asks test clients to move from httpx to httpx2, which needs Python 3.11+.
+    # Ballast still supports 3.10, so the tests keep httpx and silence only this notice.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
